@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Crown, Gauge, Bot, Settings, ShieldAlert, BarChart3, Wallet, Loader2, ArrowRight } from "lucide-react";
+import { LayoutDashboard, Users, Wallet, Loader2, ArrowRight } from "lucide-react";
 import { useIsAdmin, useSession } from "@/lib/auth";
 import { Logo } from "@/components/site/Brand";
 
@@ -12,12 +12,6 @@ const nav = [
   { to: "/admin", label: "ড্যাশবোর্ড", icon: LayoutDashboard, exact: true },
   { to: "/admin/users", label: "ইউজার", icon: Users },
   { to: "/admin/payments", label: "পেমেন্ট", icon: Wallet },
-  { to: "/admin/plans", label: "প্ল্যান", icon: Crown },
-  { to: "/admin/limits", label: "লিমিট", icon: Gauge },
-  { to: "/admin/providers", label: "AI Provider", icon: Bot },
-  { to: "/admin/moderation", label: "মডারেশন", icon: ShieldAlert },
-  { to: "/admin/analytics", label: "অ্যানালিটিক্স", icon: BarChart3 },
-  { to: "/admin/settings", label: "সেটিংস", icon: Settings },
 ] as const;
 
 function AdminLayout() {
