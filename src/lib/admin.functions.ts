@@ -39,7 +39,7 @@ export const adminSaveProvider = createServerFn({ method: "POST" })
     const db = await adminDb(context);
     const { id, api_key, ...rest } = data;
     if (id) {
-      const patch: Record<string, unknown> = { ...rest };
+      const patch: any = { ...rest };
       if (api_key) patch.api_key = api_key;
       const { error } = await db.from("ai_providers").update(patch).eq("id", id);
       if (error) return { error: "সেভ করা যায়নি" };

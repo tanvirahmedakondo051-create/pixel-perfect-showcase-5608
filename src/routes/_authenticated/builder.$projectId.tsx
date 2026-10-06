@@ -59,8 +59,12 @@ function Builder() {
   useEffect(() => {
     if (providers?.length && !providerId) setProviderId(providers[0].id);
   }, [providers, providerId]);
-  useEffect(() => endRef.current?.scrollIntoView({ behavior: "smooth" }), [messages, live]);
-  useEffect(() => taRef.current?.focus(), []);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, live]);
+  useEffect(() => {
+    taRef.current?.focus();
+  }, []);
 
   const plan = profile?.plans as { tokens_per_day: number } | null;
   const limit = plan?.tokens_per_day ?? 50000;
