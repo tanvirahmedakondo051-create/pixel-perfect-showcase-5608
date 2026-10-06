@@ -10,7 +10,7 @@ import { bnDate } from "@/lib/auth";
 type P = { id: string; custom_domain: string | null; domain_status: string; domain_found_ns: string[]; domain_checked_at: string | null };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
-  pending: { label: "অপেক্ষমাণ", cls: "bg-amber-500/15 text-amber-300" },
+  pending: { label: "অপেক্ষমাণ", cls: "bg-warning/15 text-warning" },
   connected: { label: "সংযুক্ত", cls: "bg-success/15 text-success" },
   wrong: { label: "ভুল নেমসার্ভার", cls: "bg-destructive/15 text-destructive" },
 };

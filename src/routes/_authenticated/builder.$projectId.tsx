@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon } from "lucide-react";
+import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2 } from "lucide-react";
+import { DomainDialog } from "@/components/app/DomainDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { bn, tokensToday, useProfile, useSession } from "@/lib/auth";
 import { listActiveProviders, setPublished } from "@/lib/user.functions";
@@ -47,6 +48,7 @@ function Builder() {
   const [mobilePreview, setMobilePreview] = useState(false);
   const [usedOverride, setUsedOverride] = useState<number | null>(null);
   const [published, setPub] = useState<{ on: boolean; sub: string | null }>({ on: false, sub: null });
+  const [domainOpen, setDomainOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -74,7 +76,8 @@ function Builder() {
     return () => clearTimeout(t);
   }, [html, previewSession]);
 
-  const plan = profile?.plans as { tokens_per_day: number; can_download?: boolean; can_view_code?: boolean } | null;
+  const plan = profile?.plans as { tokens_per_day: number; can_download?: boolean; can_view_code?: boolean; allow_custom_domain?: boolean } | null;
+  const canDomain = !!plan?.allow_custom_domain;
   const canDownload = plan?.can_download !== false;
   const canCode = plan?.can_view_code !== false;
   const limit = plan?.tokens_per_day ?? 50000;
@@ -181,6 +184,11 @@ function Builder() {
       </div>
       <div className="ml-auto flex gap-1">
         {canDownload && <button onClick={download} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent"><Download className="size-4" /><span className="hidden sm:inline">ডাউনলোড</span></button>}
+        {canDomain && (
+          <button onClick={() => setDomainOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="কাস্টম ডোমেইন">
+            <Link2 className="size-4" /><span className="hidden sm:inline">ডোমেইন</span>
+          </button>
+        )}
         <button onClick={doPublish} className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${published.on ? "border border-success/50 text-success" : "bg-brand"}`}>
           <Globe className="size-4" />{published.on ? "প্রকাশিত" : "প্রকাশ করুন"}
         </button>
@@ -194,6 +202,9 @@ function Builder() {
       {toolbar}
       {published.on && published.sub && (
         <a href={`/s/${published.sub}`} target="_blank" rel="noreferrer" className="truncate border-b border-border px-3 py-1.5 font-en text-xs text-cyan">/s/{published.sub}</a>
+      )}
+      {project && canDomain && (
+        <DomainDialog open={domainOpen} onOpenChange={setDomainOpen} project={project as any} onChanged={() => qc.invalidateQueries({ queryKey: ["project", projectId] })} />
       )}
       <div className="relative flex-1 overflow-hidden bg-muted/30">
         {streaming ? (
