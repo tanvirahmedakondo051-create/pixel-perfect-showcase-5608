@@ -13,14 +13,63 @@ function dhakaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
 }
 
+const STRICT_RULE = `
+
+STRICT OUTPUT RULE (MUST FOLLOW):
+- Output ONLY the raw HTML document, starting with <!DOCTYPE html> and ending with </html>.
+- NO JSON, NO tool calls (e.g. fs_write), NO markdown code fences, NO explanation before or after.`;
+
+function findHtmlInJson(v: any): string | null {
+  if (typeof v === "string") return /<html|<!doctype/i.test(v) ? v : null;
+  if (Array.isArray(v)) {
+    for (const x of v) { const r = findHtmlInJson(x); if (r) return r; }
+    return null;
+  }
+  if (v && typeof v === "object") {
+    for (const k of ["contents", "content", "html", "code", "text"]) {
+      const r = findHtmlInJson(v[k]); if (r) return r;
+    }
+    for (const k of Object.keys(v)) { const r = findHtmlInJson(v[k]); if (r) return r; }
+  }
+  return null;
+}
+
+function unescapeLiteral(s: string) {
+  return s
+    .replace(/\\r\\n/g, "\n")
+    .replace(/\\n/g, "\n")
+    .replace(/\\t/g, "\t")
+    .replace(/\\"/g, '"')
+    .replace(/\\\//g, "/")
+    .replace(/\\\\/g, "\\");
+}
+
 function extractHtml(text: string) {
-  const fence = text.match(/```(?:html)?\s*([\s\S]*?)(```|$)/i);
-  let html = fence ? fence[1] : text;
-  const start = html.search(/<!doctype html|<html/i);
-  if (start > 0) html = html.slice(start);
-  const end = html.toLowerCase().lastIndexOf("</html>");
-  if (end > 0) html = html.slice(0, end + 7);
-  return html.trim();
+  let s = text.trim();
+  // 1. Strip markdown fences
+  const fence = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
+  if (fence && !/^\s*<!doctype|^\s*<html/i.test(s)) s = fence[1].trim();
+  // 2. JSON wrappers (tool calls like fs_write)
+  const jStart = s.indexOf("{");
+  const jEnd = s.lastIndexOf("}");
+  if (jStart >= 0 && jEnd > jStart && !/^\s*<!doctype|^\s*<html/i.test(s)) {
+    try {
+      const found = findHtmlInJson(JSON.parse(s.slice(jStart, jEnd + 1)));
+      if (found) s = found;
+    } catch {
+      const m = s.match(/"(?:contents|content|html)"\s*:\s*"([\s\S]*)"\s*[},]/);
+      if (m) s = m[1];
+    }
+  }
+  // 3. Literal escape sequences → real characters
+  if (/\\n|\\"/.test(s) && !/\n/.test(s.slice(0, 200))) s = unescapeLiteral(s);
+  else if (/\\n/.test(s) && /<!doctype html>\\n|<\/\w+>\\n/i.test(s)) s = unescapeLiteral(s);
+  // 4. Trim before <!DOCTYPE / <html and after </html>
+  const start = s.search(/<!doctype html|<html/i);
+  if (start > 0) s = s.slice(start);
+  const end = s.toLowerCase().lastIndexOf("</html>");
+  if (end > 0) s = s.slice(0, end + 7);
+  return s.trim();
 }
 
 const json = (status: number, error: string) =>
@@ -78,7 +127,7 @@ export const Route = createFileRoute("/api/public/generate")({
           ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।`
           : body.prompt;
         const messages = [
-          { role: "system", content: settings.system_prompt },
+          { role: "system", content: (settings.system_prompt ?? "") + STRICT_RULE },
           ...history.filter((m) => m.role === "user").slice(-4).map((m) => ({ role: "user", content: m.content })),
           { role: "user", content: userContent },
         ];
