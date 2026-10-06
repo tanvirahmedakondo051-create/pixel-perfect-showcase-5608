@@ -38,8 +38,14 @@ export async function applyPlan(db: any, userId: string, planId: string) {
 
 const AURA = "https://pay.aurapay.top/api/payment";
 
+async function auraKey() {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin.from("app_secrets" as any).select("value").eq("name", "aurapay_api_key").maybeSingle();
+  return ((data as any)?.value as string | undefined) || process.env["AURAPAY_API_KEY"];
+}
+
 export async function auraVerifyAndApply(db: any, invoiceId: string) {
-  const key = process.env["AURAPAY_API_KEY"];
+  const key = await auraKey();
   if (!key) return { error: "পেমেন্ট সিস্টেম এখনো চালু হয়নি" };
   const { data: row } = await db.from("aura_payments").select("*").eq("invoice_id", invoiceId).maybeSingle();
   if (!row) return { error: "পেমেন্ট পাওয়া যায়নি" };
@@ -66,7 +72,7 @@ export async function auraVerifyAndApply(db: any, invoiceId: string) {
 }
 
 export async function auraCreate(body: object) {
-  const key = process.env["AURAPAY_API_KEY"];
+  const key = await auraKey();
   if (!key) return { error: "পেমেন্ট সিস্টেম এখনো চালু হয়নি" } as const;
   const r = await fetch(`${AURA}/create`, {
     method: "POST",
