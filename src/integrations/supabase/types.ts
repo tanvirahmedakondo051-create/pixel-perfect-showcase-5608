@@ -332,6 +332,10 @@ export type Database = {
         Row: {
           code_html: string
           created_at: string
+          custom_domain: string | null
+          domain_checked_at: string | null
+          domain_found_ns: string[]
+          domain_status: string
           flag_reason: string | null
           id: string
           is_flagged: boolean
@@ -346,6 +350,10 @@ export type Database = {
         Insert: {
           code_html?: string
           created_at?: string
+          custom_domain?: string | null
+          domain_checked_at?: string | null
+          domain_found_ns?: string[]
+          domain_status?: string
           flag_reason?: string | null
           id?: string
           is_flagged?: boolean
@@ -360,6 +368,10 @@ export type Database = {
         Update: {
           code_html?: string
           created_at?: string
+          custom_domain?: string | null
+          domain_checked_at?: string | null
+          domain_found_ns?: string[]
+          domain_status?: string
           flag_reason?: string | null
           id?: string
           is_flagged?: boolean
@@ -380,13 +392,19 @@ export type Database = {
           announcement_text: string
           aurapay_enabled: boolean
           free_block_publish: boolean
+          hosting_domain: string
           id: number
           logo_url: string | null
           maintenance_mode: boolean
           max_output_tokens: number
+          ns1: string
+          ns2: string
+          ns3: string
+          ns4: string
           payment_instructions: string
           rate_limit_per_minute: number
           require_email_verify: boolean
+          server_ip: string
           site_name: string
           support_email: string
           system_prompt: string
@@ -400,13 +418,19 @@ export type Database = {
           announcement_text?: string
           aurapay_enabled?: boolean
           free_block_publish?: boolean
+          hosting_domain?: string
           id?: number
           logo_url?: string | null
           maintenance_mode?: boolean
           max_output_tokens?: number
+          ns1?: string
+          ns2?: string
+          ns3?: string
+          ns4?: string
           payment_instructions?: string
           rate_limit_per_minute?: number
           require_email_verify?: boolean
+          server_ip?: string
           site_name?: string
           support_email?: string
           system_prompt?: string
@@ -420,13 +444,19 @@ export type Database = {
           announcement_text?: string
           aurapay_enabled?: boolean
           free_block_publish?: boolean
+          hosting_domain?: string
           id?: number
           logo_url?: string | null
           maintenance_mode?: boolean
           max_output_tokens?: number
+          ns1?: string
+          ns2?: string
+          ns3?: string
+          ns4?: string
           payment_instructions?: string
           rate_limit_per_minute?: number
           require_email_verify?: boolean
+          server_ip?: string
           site_name?: string
           support_email?: string
           system_prompt?: string
