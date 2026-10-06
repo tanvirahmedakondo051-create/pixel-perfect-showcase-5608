@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
   component: Settings,
 });
 
-const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled"] as const;
+const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled", "ns1", "ns2", "ns3", "ns4", "server_ip", "hosting_domain"] as const;
 
 function Settings() {
   const { data: s } = useSiteSettings();
@@ -61,6 +61,20 @@ function Settings() {
           <Toggle label="AuraPay পেমেন্ট চালু" checked={!!f.aurapay_enabled} onChange={(v) => setF({ ...f, aurapay_enabled: v })} />
         </div>
       </Panel>
+      <Panel title="হোস্টিং ও ডোমেইন">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">কাস্টম ডোমেইন যোগ করার সময় ইউজার এই নেমসার্ভারগুলো দেখবে। ডোমেইন সংযুক্ত হয়েছে কিনা তা এগুলোর সাথে মিলিয়ে যাচাই হবে।</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="নেমসার্ভার ১"><input className={`${inputCls} font-en`} value={f.ns1} onChange={set("ns1")} placeholder="ns1.example.com" /></Field>
+            <Field label="নেমসার্ভার ২"><input className={`${inputCls} font-en`} value={f.ns2} onChange={set("ns2")} placeholder="ns2.example.com" /></Field>
+            <Field label="নেমসার্ভার ৩ (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.ns3} onChange={set("ns3")} /></Field>
+            <Field label="নেমসার্ভার ৪ (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.ns4} onChange={set("ns4")} /></Field>
+            <Field label="VPS সার্ভার IP"><input className={`${inputCls} font-en`} value={f.server_ip} onChange={set("server_ip")} placeholder="123.45.67.89" /></Field>
+            <Field label="ফ্রি সাবডোমেইনের মূল ডোমেইন (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.hosting_domain} onChange={set("hosting_domain")} placeholder="sites.example.com" /></Field>
+          </div>
+          <NginxConfig f={f} />
+        </div>
+      </Panel>
       <button className={`${btn} min-h-12 w-full bg-brand sm:w-auto`} onClick={save}>সেভ করুন</button>
     </div>
   );
@@ -83,5 +97,46 @@ function AuraKey() {
         }}>সেভ</button>
       </div>
     </Field>
+  );
+}
+
+function NginxConfig({ f }: { f: any }) {
+  const [origin, setOrigin] = useState("");
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const app = origin.replace(/^https?:\/\//, "");
+  const names = ["_", f.hosting_domain ? `*.${f.hosting_domain}` : ""].filter(Boolean).join(" ");
+  const conf = `# /etc/nginx/conf.d/hexa-sites.conf
+proxy_cache_path /var/cache/nginx/hexa levels=1:2 keys_zone=hexa:50m max_size=2g inactive=7d use_temp_path=off;
+
+server {
+    listen 80 default_server;
+    server_name ${names};
+
+    gzip on;
+    gzip_types text/html text/css application/javascript image/svg+xml;
+
+    location / {
+        rewrite ^ /api/public/site break;
+        proxy_pass https://${app || "YOUR-APP-URL"};
+        proxy_ssl_server_name on;
+        proxy_set_header Host ${app || "YOUR-APP-URL"};
+        proxy_set_header X-Hexa-Host $host;
+
+        proxy_cache hexa;
+        proxy_cache_key $host;
+        proxy_cache_valid 200 404 60s;
+        proxy_cache_use_stale error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock on;
+        add_header X-Cache $upstream_cache_status;
+    }
+}`;
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">VPS-এর জন্য nginx সেটআপ</p>
+      <p className="text-xs text-muted-foreground">এটি কপি করে VPS-এ বসান, তারপর SSL চালু করুন (যেমন certbot)। এই পেজটি প্রকাশিত সাইট থেকে খুললে ঠিকানাটি সঠিক আসবে।</p>
+      <pre className="max-h-72 overflow-auto whitespace-pre rounded-xl border border-border bg-background/60 p-3 font-en text-xs">{conf}</pre>
+      <button className={`${btn} border border-input`} onClick={() => { navigator.clipboard.writeText(conf); toast.success("কপি হয়েছে"); }}>কপি করুন</button>
+    </div>
   );
 }
