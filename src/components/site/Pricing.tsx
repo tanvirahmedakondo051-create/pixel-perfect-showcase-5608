@@ -18,6 +18,7 @@ export function PricingCards() {
     try {
       const r = await create({ data: { planId } });
       if ("error" in r) { toast.error(r.error); setBusy(null); return; }
+      try { sessionStorage.setItem("hexa_pay_id", r.paymentId); } catch { /* ignore */ }
       window.location.href = r.url;
     } catch { toast.error("পেমেন্ট শুরু করা যায়নি"); setBusy(null); }
   };

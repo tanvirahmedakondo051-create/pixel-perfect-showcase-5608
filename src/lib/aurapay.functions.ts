@@ -21,12 +21,11 @@ export const createAuraPayment = createServerFn({ method: "POST" })
     const { data: row, error } = await db.from("aura_payments").insert({ user_id: context.userId, plan_id: plan.id, amount: plan.price_bdt }).select("id").single();
     if (error || !row) return { error: "পেমেন্ট শুরু করা যায়নি" };
     const r = await auraCreate({
-      full_name: prof?.name || "Hexa AI User",
-      email: prof?.email || "user@hexa.ai",
-      amount: String(plan.price_bdt),
-      metadata: { payment_id: row.id, user_id: context.userId, plan_id: plan.id },
-      redirect_url: `${origin}/payment/success`,
-      return_type: "GET",
+      cus_name: prof?.name || "Hexa AI User",
+      cus_email: prof?.email || "user@hexa.ai",
+      amount: plan.price_bdt,
+      metadata: { payment_id: row.id },
+      success_url: `${origin}/payment/success`,
       cancel_url: `${origin}/pricing`,
       webhook_url: `${origin}/api/public/aurapay-webhook`,
     });
@@ -34,14 +33,22 @@ export const createAuraPayment = createServerFn({ method: "POST" })
       await db.from("aura_payments").update({ status: "failed", raw: ("detail" in r ? r.detail : {}) as any }).eq("id", row.id);
       return { error: r.error as string };
     }
-    if (r.invoice) await db.from("aura_payments").update({ invoice_id: r.invoice }).eq("id", row.id);
-    return { url: r.url };
+    return { url: r.url, paymentId: row.id as string };
   });
 
 export const verifyAuraPayment = createServerFn({ method: "POST" })
-  .inputValidator((d: { invoiceId: string }) => z.object({ invoiceId: z.string().min(3).max(200) }).parse(d))
+  .inputValidator((d: { transactionId: string }) => z.object({ transactionId: z.string().min(3).max(200) }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
     const { auraVerifyAndApply } = await import("./plan.server");
-    return (await auraVerifyAndApply(db, data.invoiceId)) as { ok?: boolean; error?: string };
+    return (await auraVerifyAndApply(db, data.transactionId)) as { ok?: boolean; error?: string };
+  });
+
+/** Status of the signed-in user's own payment (used when AuraPay returns without a transaction id). */
+export const getAuraPaymentStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { paymentId: string }) => z.object({ paymentId: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: row } = await context.supabase.from("aura_payments").select("status").eq("id", data.paymentId).maybeSingle();
+    return { status: (row?.status as string | undefined) ?? null };
   });
