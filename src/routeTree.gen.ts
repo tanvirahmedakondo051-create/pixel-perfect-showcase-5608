@@ -15,6 +15,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as SSubdomainRouteImport } from './routes/s.$subdomain'
+import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_authenticated/builder.$projectId'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
 
 const IndexRoute = IndexRouteImport.update({
@@ -46,6 +48,17 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const SSubdomainRoute = SSubdomainRouteImport.update({
+  id: '/s/$subdomain',
+  path: '/s/$subdomain',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedBuilderProjectIdRoute =
+  AuthenticatedBuilderProjectIdRouteImport.update({
+    id: '/builder/$projectId',
+    path: '/builder/$projectId',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const ApiPublicGenerateRoute = ApiPublicGenerateRouteImport.update({
   id: '/api/public/generate',
   path: '/api/public/generate',
@@ -58,6 +71,8 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/signup': typeof SignupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/s/$subdomain': typeof SSubdomainRoute
+  '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
 }
 export interface FileRoutesByTo {
@@ -66,6 +81,8 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/signup': typeof SignupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/s/$subdomain': typeof SSubdomainRoute
+  '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
 }
 export interface FileRoutesById {
@@ -76,6 +93,8 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/signup': typeof SignupRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/s/$subdomain': typeof SSubdomainRoute
+  '/_authenticated/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
 }
 export interface FileRouteTypes {
@@ -86,6 +105,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/signup'
     | '/dashboard'
+    | '/s/$subdomain'
+    | '/builder/$projectId'
     | '/api/public/generate'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -94,6 +115,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/signup'
     | '/dashboard'
+    | '/s/$subdomain'
+    | '/builder/$projectId'
     | '/api/public/generate'
   id:
     | '__root__'
@@ -103,6 +126,8 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/signup'
     | '/_authenticated/dashboard'
+    | '/s/$subdomain'
+    | '/_authenticated/builder/$projectId'
     | '/api/public/generate'
   fileRoutesById: FileRoutesById
 }
@@ -112,6 +137,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
   SignupRoute: typeof SignupRoute
+  SSubdomainRoute: typeof SSubdomainRoute
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
 }
 
@@ -159,6 +185,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/s/$subdomain': {
+      id: '/s/$subdomain'
+      path: '/s/$subdomain'
+      fullPath: '/s/$subdomain'
+      preLoaderRoute: typeof SSubdomainRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/builder/$projectId': {
+      id: '/_authenticated/builder/$projectId'
+      path: '/builder/$projectId'
+      fullPath: '/builder/$projectId'
+      preLoaderRoute: typeof AuthenticatedBuilderProjectIdRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/api/public/generate': {
       id: '/api/public/generate'
       path: '/api/public/generate'
@@ -171,10 +211,12 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedBuilderProjectIdRoute: typeof AuthenticatedBuilderProjectIdRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedBuilderProjectIdRoute: AuthenticatedBuilderProjectIdRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -186,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
   SignupRoute: SignupRoute,
+  SSubdomainRoute: SSubdomainRoute,
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
 }
 export const routeTree = rootRouteImport
