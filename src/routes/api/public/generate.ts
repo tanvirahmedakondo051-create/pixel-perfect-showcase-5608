@@ -176,7 +176,7 @@ export const Route = createFileRoute("/api/public/generate")({
               { role: "user", content: body.prompt, at: now },
               { role: "assistant", content: html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", at: now },
             ];
-            const update: Record<string, any> = { messages: newMsgs };
+            const update: any = { messages: newMsgs };
             if (html) update.code_html = html;
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
             if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = body.prompt.slice(0, 40);
