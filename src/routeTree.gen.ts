@@ -23,13 +23,13 @@ import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminLimitsRouteImport } from './routes/_authenticated/admin.limits'
 import { Route as AuthenticatedAdminModerationRouteImport } from './routes/_authenticated/admin.moderation'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin.payments'
-import { Route as AuthenticatedAdminPlansRouteImport } from './routes/_authenticated/admin.plans'
 import { Route as AuthenticatedAdminProvidersRouteImport } from './routes/_authenticated/admin.providers'
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_authenticated/builder.$projectId'
 import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
+import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -104,11 +104,6 @@ const AuthenticatedAdminPaymentsRoute =
     path: '/payments',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
-const AuthenticatedAdminPlansRoute = AuthenticatedAdminPlansRouteImport.update({
-  id: '/plans',
-  path: '/plans',
-  getParentRoute: () => AuthenticatedAdminRoute,
-} as any)
 const AuthenticatedAdminProvidersRoute =
   AuthenticatedAdminProvidersRouteImport.update({
     id: '/providers',
@@ -142,6 +137,12 @@ const ApiPublicGenerateRoute = ApiPublicGenerateRouteImport.update({
   path: '/api/public/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedAdminPlansIndexRoute =
+  AuthenticatedAdminPlansIndexRouteImport.update({
+    id: '/plans/',
+    path: '/plans/',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -156,7 +157,6 @@ export interface FileRoutesByFullPath {
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/admin/providers': typeof AuthenticatedAdminProvidersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -164,6 +164,7 @@ export interface FileRoutesByFullPath {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -177,7 +178,6 @@ export interface FileRoutesByTo {
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/admin/providers': typeof AuthenticatedAdminProvidersRoute
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -185,6 +185,7 @@ export interface FileRoutesByTo {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -201,7 +202,6 @@ export interface FileRoutesById {
   '/_authenticated/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/_authenticated/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
-  '/_authenticated/admin/plans': typeof AuthenticatedAdminPlansRoute
   '/_authenticated/admin/providers': typeof AuthenticatedAdminProvidersRoute
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
@@ -209,6 +209,7 @@ export interface FileRoutesById {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -225,7 +226,6 @@ export interface FileRouteTypes {
     | '/admin/limits'
     | '/admin/moderation'
     | '/admin/payments'
-    | '/admin/plans'
     | '/admin/providers'
     | '/admin/settings'
     | '/admin/users'
@@ -233,6 +233,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin/'
+    | '/admin/plans/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -246,7 +247,6 @@ export interface FileRouteTypes {
     | '/admin/limits'
     | '/admin/moderation'
     | '/admin/payments'
-    | '/admin/plans'
     | '/admin/providers'
     | '/admin/settings'
     | '/admin/users'
@@ -254,6 +254,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin'
+    | '/admin/plans'
   id:
     | '__root__'
     | '/'
@@ -269,7 +270,6 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/limits'
     | '/_authenticated/admin/moderation'
     | '/_authenticated/admin/payments'
-    | '/_authenticated/admin/plans'
     | '/_authenticated/admin/providers'
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/users'
@@ -277,6 +277,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/_authenticated/admin/'
+    | '/_authenticated/admin/plans/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -391,13 +392,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPaymentsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
-    '/_authenticated/admin/plans': {
-      id: '/_authenticated/admin/plans'
-      path: '/plans'
-      fullPath: '/admin/plans'
-      preLoaderRoute: typeof AuthenticatedAdminPlansRouteImport
-      parentRoute: typeof AuthenticatedAdminRoute
-    }
     '/_authenticated/admin/providers': {
       id: '/_authenticated/admin/providers'
       path: '/providers'
@@ -440,6 +434,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/admin/plans/': {
+      id: '/_authenticated/admin/plans/'
+      path: '/plans'
+      fullPath: '/admin/plans/'
+      preLoaderRoute: typeof AuthenticatedAdminPlansIndexRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
@@ -448,11 +449,11 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminLimitsRoute: typeof AuthenticatedAdminLimitsRoute
   AuthenticatedAdminModerationRoute: typeof AuthenticatedAdminModerationRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
-  AuthenticatedAdminPlansRoute: typeof AuthenticatedAdminPlansRoute
   AuthenticatedAdminProvidersRoute: typeof AuthenticatedAdminProvidersRoute
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminPlansIndexRoute: typeof AuthenticatedAdminPlansIndexRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
@@ -460,11 +461,11 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminLimitsRoute: AuthenticatedAdminLimitsRoute,
   AuthenticatedAdminModerationRoute: AuthenticatedAdminModerationRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
-  AuthenticatedAdminPlansRoute: AuthenticatedAdminPlansRoute,
   AuthenticatedAdminProvidersRoute: AuthenticatedAdminProvidersRoute,
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+  AuthenticatedAdminPlansIndexRoute: AuthenticatedAdminPlansIndexRoute,
 }
 
 const AuthenticatedAdminRouteWithChildren =
