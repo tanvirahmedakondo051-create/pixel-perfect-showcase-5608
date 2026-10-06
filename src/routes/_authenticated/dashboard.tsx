@@ -8,6 +8,7 @@ import { AppHeader, SitePreviewThumb } from "@/components/app/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { bn, bnDate, tokensToday, useProfile, useSession } from "@/lib/auth";
 import { createProject, setPublished } from "@/lib/user.functions";
+import { hostingStatus } from "@/lib/hosting";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
