@@ -139,6 +139,12 @@ function Dashboard() {
                         <ExternalLink className="size-3" /> /s/{p.subdomain}
                       </a>
                     )}
+                    {p.custom_domain && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="truncate font-en">{p.custom_domain}</span>
+                        <DomainStatusBadge status={p.domain_status} />
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
