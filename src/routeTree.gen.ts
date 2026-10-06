@@ -29,6 +29,7 @@ import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authentic
 import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_authenticated/builder.$projectId'
 import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
+import { Route as ApiPublicSiteRouteImport } from './routes/api/public/site'
 import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
 import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 
@@ -138,6 +139,11 @@ const ApiPublicGenerateRoute = ApiPublicGenerateRouteImport.update({
   path: '/api/public/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
+  id: '/api/public/site',
+  path: '/api/public/site',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminPlansIndexRoute =
   AuthenticatedAdminPlansIndexRouteImport.update({
     id: '/plans/',
@@ -170,6 +176,7 @@ export interface FileRoutesByFullPath {
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/site': typeof ApiPublicSiteRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/site': typeof ApiPublicSiteRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/_authenticated/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/site': typeof ApiPublicSiteRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
@@ -242,6 +251,7 @@ export interface FileRouteTypes {
     | '/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/site'
     | '/admin/'
     | '/admin/plans/$id'
     | '/admin/plans/'
@@ -264,6 +274,7 @@ export interface FileRouteTypes {
     | '/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/site'
     | '/admin'
     | '/admin/plans/$id'
     | '/admin/plans'
@@ -288,6 +299,7 @@ export interface FileRouteTypes {
     | '/_authenticated/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/site'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/plans/$id'
     | '/_authenticated/admin/plans/'
@@ -303,6 +315,7 @@ export interface RootRouteChildren {
   SSubdomainRoute: typeof SSubdomainRoute
   ApiPublicAurapayWebhookRoute: typeof ApiPublicAurapayWebhookRoute
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
+  ApiPublicSiteRoute: typeof ApiPublicSiteRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -447,6 +460,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/site': {
+      id: '/api/public/site'
+      path: '/api/public/site'
+      fullPath: '/api/public/site'
+      preLoaderRoute: typeof ApiPublicSiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin/plans/': {
       id: '/_authenticated/admin/plans/'
       path: '/plans'
@@ -518,6 +538,7 @@ const rootRouteChildren: RootRouteChildren = {
   SSubdomainRoute: SSubdomainRoute,
   ApiPublicAurapayWebhookRoute: ApiPublicAurapayWebhookRoute,
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
+  ApiPublicSiteRoute: ApiPublicSiteRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
