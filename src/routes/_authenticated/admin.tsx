@@ -41,7 +41,7 @@ function AdminLayout() {
           <Logo />
           <Link to="/dashboard" className="flex min-h-11 items-center gap-1 text-xs text-muted-foreground"><ArrowRight className="size-4 rotate-180" />অ্যাপ</Link>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible">
+        <nav className="flex flex-wrap gap-1 px-2 pb-2 lg:flex-col lg:flex-nowrap">
           {nav.map((n) => (
             <Link
               key={n.to}
@@ -62,11 +62,3 @@ function AdminLayout() {
   );
 }
 
-export function PageTitle({ title, children }: { title: string; children?: React.ReactNode }) {
-  return (
-    <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-      <h1 className="text-2xl font-bold">{title}</h1>
-      {children}
-    </div>
-  );
-}
