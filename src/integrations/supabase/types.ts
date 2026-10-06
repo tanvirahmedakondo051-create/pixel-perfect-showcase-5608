@@ -214,6 +214,7 @@ export type Database = {
           is_published: boolean
           messages: Json
           name: string
+          show_badge: boolean
           subdomain: string | null
           updated_at: string
           user_id: string
@@ -227,6 +228,7 @@ export type Database = {
           is_published?: boolean
           messages?: Json
           name?: string
+          show_badge?: boolean
           subdomain?: string | null
           updated_at?: string
           user_id: string
@@ -240,6 +242,7 @@ export type Database = {
           is_published?: boolean
           messages?: Json
           name?: string
+          show_badge?: boolean
           subdomain?: string | null
           updated_at?: string
           user_id?: string
