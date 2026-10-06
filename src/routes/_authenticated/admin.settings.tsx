@@ -86,7 +86,7 @@ function AuraKey() {
   const { data, refetch } = useQuery({ queryKey: ["aura-key"], queryFn: () => get() });
   const [v, setV] = useState("");
   return (
-    <Field label={`AuraPay API Key ${data?.masked ? `(বর্তমান: ${data.masked})` : "(এখনো দেওয়া হয়নি)"}`}>
+    <Field label={`AuraPay API Key ${!data ? "" : data.masked ? `(বর্তমান: ${data.masked})` : "(এখনো দেওয়া হয়নি)"}`}>
       <div className="flex gap-2">
         <input className={`${inputCls} font-en`} type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="নতুন API Key বসান" />
         <button className={`${btn} bg-brand shrink-0`} onClick={async () => {
