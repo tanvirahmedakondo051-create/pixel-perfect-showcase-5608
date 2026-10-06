@@ -30,6 +30,7 @@ import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_aut
 import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
 import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
+import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -143,6 +144,12 @@ const AuthenticatedAdminPlansIndexRoute =
     path: '/plans/',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminPlansIdRoute =
+  AuthenticatedAdminPlansIdRouteImport.update({
+    id: '/plans/$id',
+    path: '/plans/$id',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -164,6 +171,7 @@ export interface FileRoutesByFullPath {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRoutesByTo {
@@ -185,6 +193,7 @@ export interface FileRoutesByTo {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRoutesById {
@@ -209,6 +218,7 @@ export interface FileRoutesById {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
 }
 export interface FileRouteTypes {
@@ -233,6 +243,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin/'
+    | '/admin/plans/$id'
     | '/admin/plans/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -254,6 +265,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin'
+    | '/admin/plans/$id'
     | '/admin/plans'
   id:
     | '__root__'
@@ -277,6 +289,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/_authenticated/admin/'
+    | '/_authenticated/admin/plans/$id'
     | '/_authenticated/admin/plans/'
   fileRoutesById: FileRoutesById
 }
@@ -441,6 +454,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminPlansIndexRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/plans/$id': {
+      id: '/_authenticated/admin/plans/$id'
+      path: '/plans/$id'
+      fullPath: '/admin/plans/$id'
+      preLoaderRoute: typeof AuthenticatedAdminPlansIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
@@ -453,6 +473,7 @@ interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminSettingsRoute: typeof AuthenticatedAdminSettingsRoute
   AuthenticatedAdminUsersRoute: typeof AuthenticatedAdminUsersRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminPlansIdRoute: typeof AuthenticatedAdminPlansIdRoute
   AuthenticatedAdminPlansIndexRoute: typeof AuthenticatedAdminPlansIndexRoute
 }
 
@@ -465,6 +486,7 @@ const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminSettingsRoute: AuthenticatedAdminSettingsRoute,
   AuthenticatedAdminUsersRoute: AuthenticatedAdminUsersRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+  AuthenticatedAdminPlansIdRoute: AuthenticatedAdminPlansIdRoute,
   AuthenticatedAdminPlansIndexRoute: AuthenticatedAdminPlansIndexRoute,
 }
 
