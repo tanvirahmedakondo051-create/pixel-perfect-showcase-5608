@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { bnDate } from "@/lib/auth";
 import { PageTitle, Panel, Confirm, btn } from "@/components/admin/ui";
 import { inputCls } from "@/components/admin/fields";
+import { DomainStatusBadge } from "@/components/app/DomainDialog";
 
 export const Route = createFileRoute("/_authenticated/admin/moderation")({
   head: () => ({ meta: [{ title: "মডারেশন — অ্যাডমিন" }] }),
@@ -24,6 +25,10 @@ function Moderation() {
       const em = Object.fromEntries((profs ?? []).map((p) => [p.id, p.email]));
       return (data ?? []).map((p) => ({ ...p, email: em[p.user_id] ?? "" }));
     },
+  });
+  const domains = useQuery({
+    queryKey: ["admin-domains"],
+    queryFn: async () => (await supabase.from("projects").select("id,name,custom_domain,domain_status,domain_found_ns,domain_checked_at").not("custom_domain", "is", null).order("updated_at", { ascending: false })).data ?? [],
   });
   const kws = useQuery({ queryKey: ["admin-kw"], queryFn: async () => (await supabase.from("flag_keywords").select("*").order("created_at")).data ?? [] });
   const [kw, setKw] = useState("");
@@ -69,6 +74,22 @@ function Moderation() {
                   <button className={`${btn} glass text-destructive`} onClick={() => setAct({ type: "delete", p })}><Trash2 className="size-4" /> মুছুন + সতর্ক</button>
                   <button className={`${btn} text-destructive`} onClick={() => setAct({ type: "ban", p })}><Ban className="size-4" /> ব্যান</button>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+      <Panel title="কাস্টম ডোমেইন">
+        {!domains.data?.length ? <p className="text-sm text-muted-foreground">এখনো কোনো কাস্টম ডোমেইন যোগ হয়নি।</p> : (
+          <div className="space-y-2">
+            {domains.data.map((d) => (
+              <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-en font-semibold">{d.custom_domain}</p>
+                  <p className="truncate text-xs text-muted-foreground">{d.name}{d.domain_checked_at ? ` · শেষ যাচাই ${bnDate(d.domain_checked_at)}` : ""}</p>
+                  {d.domain_found_ns?.length > 0 && <p className="truncate font-en text-xs text-muted-foreground">{d.domain_found_ns.join(", ")}</p>}
+                </div>
+                <DomainStatusBadge status={d.domain_status} />
               </div>
             ))}
           </div>

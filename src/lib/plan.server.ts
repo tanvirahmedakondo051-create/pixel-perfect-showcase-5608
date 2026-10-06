@@ -44,29 +44,39 @@ async function auraKey() {
   return ((data as any)?.value as string | undefined) || process.env["AURAPAY_API_KEY"];
 }
 
-export async function auraVerifyAndApply(db: any, invoiceId: string) {
+function parseMeta(m: any): any {
+  if (!m) return {};
+  if (typeof m === "string") { try { return JSON.parse(m); } catch { return {}; } }
+  return m;
+}
+
+/** Verify a transaction with AuraPay (official plugin format) and turn on the plan once. */
+export async function auraVerifyAndApply(db: any, transactionId: string) {
   const key = await auraKey();
   if (!key) return { error: "পেমেন্ট সিস্টেম এখনো চালু হয়নি" };
-  const { data: row } = await db.from("aura_payments").select("*").eq("invoice_id", invoiceId).maybeSingle();
-  if (!row) return { error: "পেমেন্ট পাওয়া যায়নি" };
-  if (row.status === "completed") return { ok: true };
   const r = await fetch(`${AURA}/verify`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "RT-UDDOKTAPAY-API-KEY": key },
-    body: JSON.stringify({ invoice_id: invoiceId }),
+    headers: { "content-type": "application/json", Accept: "application/json", "API-KEY": key },
+    body: JSON.stringify({ transaction_id: transactionId }),
   });
   const j: any = await r.json().catch(() => ({}));
+  const meta = parseMeta(j?.metadata ?? j?.data?.metadata);
+  const paymentId = String(meta?.payment_id ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(paymentId)) return { error: "পেমেন্ট পাওয়া যায়নি" };
+  const { data: row } = await db.from("aura_payments").select("*").eq("id", paymentId).maybeSingle();
+  if (!row) return { error: "পেমেন্ট পাওয়া যায়নি" };
+  if (row.status === "completed") return { ok: true };
   const status = String(j?.status ?? j?.data?.status ?? "").toUpperCase();
   const amount = Number(j?.amount ?? j?.data?.amount ?? 0);
   if (status !== "COMPLETED") {
-    if (status) await db.from("aura_payments").update({ status: status.toLowerCase(), raw: j }).eq("id", row.id);
+    if (status && status !== "1" && status !== "0") await db.from("aura_payments").update({ status: status.toLowerCase(), invoice_id: transactionId, raw: j }).eq("id", row.id);
     return { error: status === "PENDING" ? "পেমেন্ট এখনো যাচাই হচ্ছে, একটু পরে আবার দেখুন" : "পেমেন্ট সম্পন্ন হয়নি" };
   }
   if (amount && amount + 0.5 < row.amount) {
-    await db.from("aura_payments").update({ status: "amount_mismatch", raw: j }).eq("id", row.id);
+    await db.from("aura_payments").update({ status: "amount_mismatch", invoice_id: transactionId, raw: j }).eq("id", row.id);
     return { error: "পেমেন্টের পরিমাণ মেলেনি, সাপোর্টে যোগাযোগ করুন" };
   }
-  const { data: claimed } = await db.from("aura_payments").update({ status: "completed", raw: j }).eq("id", row.id).neq("status", "completed").select("id");
+  const { data: claimed } = await db.from("aura_payments").update({ status: "completed", invoice_id: transactionId, raw: j }).eq("id", row.id).neq("status", "completed").select("id");
   if (claimed?.length) await applyPlan(db, row.user_id, row.plan_id);
   return { ok: true };
 }
@@ -76,7 +86,7 @@ export async function auraCreate(body: object) {
   if (!key) return { error: "পেমেন্ট সিস্টেম এখনো চালু হয়নি" } as const;
   const r = await fetch(`${AURA}/create`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "RT-UDDOKTAPAY-API-KEY": key },
+    headers: { "content-type": "application/json", Accept: "application/json", "API-KEY": key },
     body: JSON.stringify(body),
   });
   const text = await r.text();
@@ -89,6 +99,5 @@ export async function auraCreate(body: object) {
     const keyProblem = /invalid api|unauthori|api key/i.test(String(detail.message));
     return { error: keyProblem ? "পেমেন্ট সিস্টেম সেটআপে সমস্যা আছে, অ্যাডমিনকে জানান" : "পেমেন্ট শুরু করা যায়নি, আবার চেষ্টা করুন", detail } as const;
   }
-  const invoice = j?.invoice_id ?? j?.data?.invoice_id ?? new URL(url).pathname.split("/").filter(Boolean).pop();
-  return { url: String(url), invoice: invoice ? String(invoice) : null } as const;
+  return { url: String(url) } as const;
 }

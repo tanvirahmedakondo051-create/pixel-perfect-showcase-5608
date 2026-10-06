@@ -68,3 +68,62 @@ export const setPublished = createServerFn({ method: "POST" })
     if (error) return { error: "প্রকাশ করা যায়নি" };
     return { ok: true as const, subdomain };
   });
+
+const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+async function domainCtx(supabase: any, userId: string, projectId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { effectivePlan } = await import("./plan.server");
+  const { data: proj } = await supabase.from("projects").select("id, user_id, custom_domain").eq("id", projectId).single();
+  if (!proj || proj.user_id !== userId) return { error: "প্রজেক্ট পাওয়া যায়নি" } as const;
+  const prof = await effectivePlan(supabaseAdmin, userId);
+  if (prof?.is_banned) return { error: "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে" } as const;
+  if (!prof?.plans?.allow_custom_domain) return { error: "আপনার প্ল্যানে কাস্টম ডোমেইন নেই। আপগ্রেড করুন।" } as const;
+  return { db: supabaseAdmin, proj } as const;
+}
+
+export const setCustomDomain = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; domain: string | null }) => z.object({ id: z.string().uuid(), domain: z.string().max(253).nullable() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const c = await domainCtx(context.supabase, context.userId, data.id);
+    if ("error" in c) return { error: c.error as string };
+    let domain: string | null = null;
+    if (data.domain) {
+      domain = data.domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+      if (!DOMAIN_RE.test(domain)) return { error: "সঠিক ডোমেইন দিন, যেমন myshop.com" };
+    }
+    const { error } = await c.db.from("projects").update({ custom_domain: domain, domain_status: "pending", domain_found_ns: [], domain_checked_at: null }).eq("id", data.id);
+    if (error) return { error: error.code === "23505" ? "এই ডোমেইনটি অন্য একটি প্রজেক্টে যুক্ত আছে" : "ডোমেইন সেভ করা যায়নি" };
+    return { ok: true as const };
+  });
+
+export const checkCustomDomain = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const c = await domainCtx(context.supabase, context.userId, data.id);
+    if ("error" in c) return { error: c.error as string };
+    if (!c.proj.custom_domain) return { error: "আগে একটি ডোমেইন যোগ করুন" };
+    const { checkNameservers } = await import("./domain.server");
+    const r = await checkNameservers(c.db, c.proj.custom_domain);
+    await c.db.from("projects").update({ domain_status: r.status, domain_found_ns: r.found, domain_checked_at: new Date().toISOString() }).eq("id", data.id);
+    return { ok: true as const, status: r.status, found: r.found, expected: r.expected };
+  });
+
+/** Re-check all of the user's pending/wrong domains (called when the dashboard opens). */
+export const recheckMyDomains = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { checkNameservers } = await import("./domain.server");
+    const { data: list } = await supabaseAdmin.from("projects").select("id, custom_domain, domain_checked_at").eq("user_id", context.userId).not("custom_domain", "is", null).neq("domain_status", "connected");
+    let changed = 0;
+    for (const p of (list ?? []).slice(0, 10)) {
+      if (p.domain_checked_at && Date.now() - new Date(p.domain_checked_at).getTime() < 5 * 60_000) continue;
+      const r = await checkNameservers(supabaseAdmin, p.custom_domain!);
+      await supabaseAdmin.from("projects").update({ domain_status: r.status, domain_found_ns: r.found, domain_checked_at: new Date().toISOString() }).eq("id", p.id);
+      if (r.status === "connected") changed++;
+    }
+    return { changed };
+  });

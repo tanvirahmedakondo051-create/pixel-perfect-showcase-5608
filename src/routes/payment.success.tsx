@@ -3,10 +3,13 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
-import { verifyAuraPayment } from "@/lib/aurapay.functions";
+import { getAuraPaymentStatus, verifyAuraPayment } from "@/lib/aurapay.functions";
 
 export const Route = createFileRoute("/payment/success")({
-  validateSearch: (s: Record<string, unknown>) => ({ invoice_id: typeof s.invoice_id === "string" ? s.invoice_id : undefined }),
+  validateSearch: (s: Record<string, unknown>) => {
+    const t = s.transactionId ?? s.transaction_id ?? s.invoice_id;
+    return { transactionId: typeof t === "string" || typeof t === "number" ? String(t) : undefined };
+  },
   head: () => ({
     meta: [
       { title: "পেমেন্ট যাচাই — Hexa AI" },
@@ -21,24 +24,37 @@ export const Route = createFileRoute("/payment/success")({
 });
 
 function Success() {
-  const { invoice_id } = Route.useSearch();
+  const { transactionId } = Route.useSearch();
   const verify = useServerFn(verifyAuraPayment);
+  const status = useServerFn(getAuraPaymentStatus);
   const qc = useQueryClient();
   const [state, setState] = useState<{ s: "load" | "ok" | "err"; msg?: string }>({ s: "load" });
   useEffect(() => {
-    if (!invoice_id) {
-      setState({ s: "err", msg: "পেমেন্টের তথ্য পাওয়া যায়নি" });
-      return;
-    }
-    verify({ data: { invoiceId: invoice_id } })
-      .then((r) => {
-        if (r.ok) {
-          setState({ s: "ok" });
-          qc.invalidateQueries();
-        } else setState({ s: "err", msg: r.error });
-      })
-      .catch(() => setState({ s: "err", msg: "যাচাই করা যায়নি, আবার চেষ্টা করুন" }));
-  }, [invoice_id]);
+    let stop = false;
+    const done = () => { setState({ s: "ok" }); qc.invalidateQueries(); try { sessionStorage.removeItem("hexa_pay_id"); } catch { /* ignore */ } };
+    (async () => {
+      try {
+        if (transactionId) {
+          const r = await verify({ data: { transactionId } });
+          if (r.ok) return done();
+          return setState({ s: "err", msg: r.error });
+        }
+        // No transaction id in the link: wait for AuraPay's background confirmation.
+        let pid: string | null = null;
+        try { pid = sessionStorage.getItem("hexa_pay_id"); } catch { /* ignore */ }
+        if (!pid) return setState({ s: "err", msg: "পেমেন্টের তথ্য পাওয়া যায়নি" });
+        for (let i = 0; i < 20 && !stop; i++) {
+          const r = await status({ data: { paymentId: pid } });
+          if (r.status === "completed") return done();
+          await new Promise((res) => setTimeout(res, 3000));
+        }
+        if (!stop) setState({ s: "err", msg: "পেমেন্ট এখনো নিশ্চিত হয়নি। কয়েক মিনিট পরে ড্যাশবোর্ডে দেখুন।" });
+      } catch {
+        setState({ s: "err", msg: "যাচাই করা যায়নি, আবার চেষ্টা করুন" });
+      }
+    })();
+    return () => { stop = true; };
+  }, [transactionId]);
   return (
     <div className="grid min-h-screen place-items-center px-4">
       <div className="glass w-full max-w-md rounded-2xl p-8 text-center">

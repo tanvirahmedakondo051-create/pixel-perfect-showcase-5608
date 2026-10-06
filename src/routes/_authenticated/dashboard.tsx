@@ -1,13 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Plus, ExternalLink, Copy, Trash2, Globe, FolderOpen, Crown, Zap, Layers } from "lucide-react";
 import { AppHeader, SitePreviewThumb } from "@/components/app/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { bn, bnDate, tokensToday, useProfile, useSession } from "@/lib/auth";
-import { createProject, setPublished } from "@/lib/user.functions";
+import { createProject, recheckMyDomains, setPublished } from "@/lib/user.functions";
+import { DomainStatusBadge } from "@/components/app/DomainDialog";
 import { hostingStatus } from "@/lib/hosting";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -26,6 +27,11 @@ function Dashboard() {
   const { data: profile } = useProfile(user?.id);
   const [del, setDel] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const recheck = useServerFn(recheckMyDomains);
+  useEffect(() => {
+    if (!user) return;
+    recheck().then((r) => { if (r.changed) { qc.invalidateQueries({ queryKey: ["projects", user.id] }); toast.success("আপনার কাস্টম ডোমেইন সংযুক্ত হয়েছে!"); } }).catch(() => {});
+  }, [user?.id]);
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ["projects", user?.id],
@@ -33,7 +39,7 @@ function Dashboard() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("projects")
-        .select("id, name, code_html, is_published, is_flagged, subdomain, updated_at")
+        .select("id, name, code_html, is_published, is_flagged, subdomain, updated_at, custom_domain, domain_status")
         .eq("user_id", user!.id)
         .order("updated_at", { ascending: false });
       if (error) throw error;
@@ -132,6 +138,12 @@ function Dashboard() {
                       <a href={`/s/${p.subdomain}`} target="_blank" rel="noreferrer" className="mt-2 flex items-center gap-1 truncate font-en text-xs text-cyan">
                         <ExternalLink className="size-3" /> /s/{p.subdomain}
                       </a>
+                    )}
+                    {p.custom_domain && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="truncate font-en">{p.custom_domain}</span>
+                        <DomainStatusBadge status={p.domain_status} />
+                      </div>
                     )}
                   </div>
                 </div>
