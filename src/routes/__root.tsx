@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   Outlet,
   Link,
@@ -17,6 +17,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin, useSession } from "@/lib/auth";
+import { useSiteSettings } from "@/lib/site";
 
 function NotFoundComponent() {
   return (
@@ -128,17 +129,6 @@ function RootComponent() {
       <Toaster position="top-center" richColors />
     </QueryClientProvider>
   );
-}
-
-export function useSiteSettings() {
-  return useQuery({
-    queryKey: ["site-settings"],
-    queryFn: async () => {
-      const { data } = await supabase.from("site_settings").select("*").eq("id", 1).single();
-      return data;
-    },
-    staleTime: 60_000,
-  });
 }
 
 function MaintenanceGate({ children }: { children: ReactNode }) {
