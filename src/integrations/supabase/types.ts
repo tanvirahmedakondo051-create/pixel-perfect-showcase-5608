@@ -59,6 +59,24 @@ export type Database = {
         }
         Relationships: []
       }
+      app_secrets: {
+        Row: {
+          name: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          name: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          name?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       aura_payments: {
         Row: {
           amount: number

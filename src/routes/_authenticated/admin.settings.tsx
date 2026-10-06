@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { adminGetAuraKey, adminSetAuraKey } from "@/lib/admin.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/site";
@@ -55,10 +57,31 @@ function Settings() {
             <Field label="সাপোর্ট ইমেইল"><input className={inputCls} value={f.support_email} onChange={set("support_email")} /></Field>
             <Field label="টেলিগ্রাম লিংক"><input className={inputCls} value={f.telegram_link} onChange={set("telegram_link")} /></Field>
           </div>
+          <AuraKey />
           <Toggle label="AuraPay পেমেন্ট চালু" checked={!!f.aurapay_enabled} onChange={(v) => setF({ ...f, aurapay_enabled: v })} />
         </div>
       </Panel>
       <button className={`${btn} min-h-12 w-full bg-brand sm:w-auto`} onClick={save}>সেভ করুন</button>
     </div>
+  );
+}
+
+function AuraKey() {
+  const get = useServerFn(adminGetAuraKey);
+  const setKey = useServerFn(adminSetAuraKey);
+  const { data, refetch } = useQuery({ queryKey: ["aura-key"], queryFn: () => get() });
+  const [v, setV] = useState("");
+  return (
+    <Field label={`AuraPay API Key ${data?.masked ? `(বর্তমান: ${data.masked})` : "(এখনো দেওয়া হয়নি)"}`}>
+      <div className="flex gap-2">
+        <input className={`${inputCls} font-en`} type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="নতুন API Key বসান" />
+        <button className={`${btn} bg-brand shrink-0`} onClick={async () => {
+          if (v.trim().length < 8) return toast.error("সঠিক API Key দিন");
+          const r = await setKey({ data: { key: v } });
+          if ("error" in r) return toast.error(r.error);
+          setV(""); refetch(); toast.success("API Key সেভ হয়েছে");
+        }}>সেভ</button>
+      </div>
+    </Field>
   );
 }
