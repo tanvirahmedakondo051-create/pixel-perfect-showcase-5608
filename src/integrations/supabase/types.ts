@@ -289,6 +289,7 @@ export type Database = {
           is_banned: boolean
           last_reset_date: string
           name: string | null
+          plan_ended_at: string | null
           plan_expires_at: string | null
           plan_id: string | null
           tokens_used_today: number
@@ -300,6 +301,7 @@ export type Database = {
           is_banned?: boolean
           last_reset_date?: string
           name?: string | null
+          plan_ended_at?: string | null
           plan_expires_at?: string | null
           plan_id?: string | null
           tokens_used_today?: number
@@ -311,6 +313,7 @@ export type Database = {
           is_banned?: boolean
           last_reset_date?: string
           name?: string | null
+          plan_ended_at?: string | null
           plan_expires_at?: string | null
           plan_id?: string | null
           tokens_used_today?: number

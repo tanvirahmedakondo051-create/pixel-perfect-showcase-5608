@@ -31,7 +31,7 @@ export const createAuraPayment = createServerFn({ method: "POST" })
       webhook_url: `${origin}/api/public/aurapay-webhook`,
     });
     if ("error" in r) {
-      await db.from("aura_payments").update({ status: "failed" }).eq("id", row.id);
+      await db.from("aura_payments").update({ status: "failed", raw: ("detail" in r ? r.detail : {}) as any }).eq("id", row.id);
       return { error: r.error as string };
     }
     if (r.invoice) await db.from("aura_payments").update({ invoice_id: r.invoice }).eq("id", row.id);

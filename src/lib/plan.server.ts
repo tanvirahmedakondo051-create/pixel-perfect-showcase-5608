@@ -4,7 +4,7 @@ export async function effectivePlan(db: any, userId: string) {
   if (!profile) return null;
   if (profile.plan_expires_at && new Date(profile.plan_expires_at) < new Date()) {
     const { data: def } = await db.from("plans").select("*").eq("is_default", true).order("created_at").limit(1).maybeSingle();
-    await db.from("profiles").update({ plan_id: def?.id ?? null, plan_expires_at: null }).eq("id", userId);
+    await db.from("profiles").update({ plan_id: def?.id ?? null, plan_expires_at: null, plan_ended_at: profile.plan_expires_at }).eq("id", userId);
     profile.plan_id = def?.id ?? null;
     profile.plan_expires_at = null;
     profile.plans = def ?? null;
@@ -33,7 +33,7 @@ export async function applyPlan(db: any, userId: string, planId: string) {
   let base = Date.now();
   if (prof?.plan_id === planId && prof.plan_expires_at && new Date(prof.plan_expires_at).getTime() > base) base = new Date(prof.plan_expires_at).getTime();
   const expires = days > 0 ? new Date(base + days * 86400_000).toISOString() : null;
-  await db.from("profiles").update({ plan_id: planId, plan_expires_at: expires }).eq("id", userId);
+  await db.from("profiles").update({ plan_id: planId, plan_expires_at: expires, plan_ended_at: null }).eq("id", userId);
 }
 
 const AURA = "https://pay.aurapay.top/api/payment";
@@ -85,7 +85,9 @@ export async function auraCreate(body: object) {
   const url = j?.payment_url ?? j?.data?.payment_url;
   if (!r.ok || !url) {
     console.error("aurapay create failed", r.status, text.slice(0, 300));
-    return { error: "পেমেন্ট শুরু করা যায়নি, আবার চেষ্টা করুন" } as const;
+    const detail = { http_status: r.status, message: j?.message ?? text.slice(0, 300) };
+    const keyProblem = /invalid api|unauthori|api key/i.test(String(detail.message));
+    return { error: keyProblem ? "পেমেন্ট সিস্টেম সেটআপে সমস্যা আছে, অ্যাডমিনকে জানান" : "পেমেন্ট শুরু করা যায়নি, আবার চেষ্টা করুন", detail } as const;
   }
   const invoice = j?.invoice_id ?? j?.data?.invoice_id ?? new URL(url).pathname.split("/").filter(Boolean).pop();
   return { url: String(url), invoice: invoice ? String(invoice) : null } as const;
