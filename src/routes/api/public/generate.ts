@@ -93,8 +93,9 @@ export const Route = createFileRoute("/api/public/generate")({
           return json(400, "অনুরোধটি সঠিক নয়");
         }
 
-        const [{ data: profile }, { data: settings }, { data: project }] = await Promise.all([
-          db.from("profiles").select("*, plans(*)").eq("id", user.id).single(),
+        const { effectivePlan, allowedProviders } = await import("@/lib/plan.server");
+        const [profile, { data: settings }, { data: project }] = await Promise.all([
+          effectivePlan(db, user.id),
           db.from("site_settings").select("*").eq("id", 1).single(),
           db.from("projects").select("*").eq("id", body.projectId).single(),
         ]);
@@ -114,9 +115,9 @@ export const Route = createFileRoute("/api/public/generate")({
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if ((recent ?? 0) >= settings.rate_limit_per_minute) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if ((recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute)) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
-        const { data: providers } = await db.from("ai_providers").select("*").eq("is_active", true).order("is_default", { ascending: false }).order("sort_order");
+        const providers = await allowedProviders(db, profile.plans);
         if (!providers?.length) return json(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
         const ordered = body.providerId
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
@@ -137,7 +138,7 @@ export const Route = createFileRoute("/api/public/generate")({
           async start(controller) {
             const send = (o: object) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
             let res: Response | null = null;
-            let usedProvider: (typeof ordered)[number] | null = null;
+            let usedProvider: any = null;
             for (let i = 0; i < ordered.length; i++) {
               const p = ordered[i];
               if (i > 0) send({ t: "notice", msg: "মূল AI ব্যস্ত, বিকল্প ব্যবহার করা হচ্ছে..." });

@@ -66,7 +66,9 @@ function Builder() {
     taRef.current?.focus();
   }, []);
 
-  const plan = profile?.plans as { tokens_per_day: number } | null;
+  const plan = profile?.plans as { tokens_per_day: number; can_download?: boolean; can_view_code?: boolean } | null;
+  const canDownload = plan?.can_download !== false;
+  const canCode = plan?.can_view_code !== false;
   const limit = plan?.tokens_per_day ?? 50000;
   const used = usedOverride ?? tokensToday(profile);
   const pct = Math.min(100, (used / limit) * 100);
@@ -167,10 +169,10 @@ function Builder() {
       <div className="flex rounded-lg bg-muted p-1">
         <button onClick={() => { setDevice("desktop"); setShowCode(false); }} className={`grid size-10 place-items-center rounded-md ${device === "desktop" && !showCode ? "bg-primary" : ""}`} aria-label="ডেস্কটপ"><Monitor className="size-4" /></button>
         <button onClick={() => { setDevice("mobile"); setShowCode(false); }} className={`grid size-10 place-items-center rounded-md ${device === "mobile" && !showCode ? "bg-primary" : ""}`} aria-label="মোবাইল"><Smartphone className="size-4" /></button>
-        <button onClick={() => setShowCode(!showCode)} className={`grid size-10 place-items-center rounded-md ${showCode ? "bg-primary" : ""}`} aria-label="কোড"><Code2 className="size-4" /></button>
+        {canCode && <button onClick={() => setShowCode(!showCode)} className={`grid size-10 place-items-center rounded-md ${showCode ? "bg-primary" : ""}`} aria-label="কোড"><Code2 className="size-4" /></button>}
       </div>
       <div className="ml-auto flex gap-1">
-        <button onClick={download} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent"><Download className="size-4" /><span className="hidden sm:inline">ডাউনলোড</span></button>
+        {canDownload && <button onClick={download} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent"><Download className="size-4" /><span className="hidden sm:inline">ডাউনলোড</span></button>}
         <button onClick={doPublish} className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${published.on ? "border border-success/50 text-success" : "bg-brand"}`}>
           <Globe className="size-4" />{published.on ? "প্রকাশিত" : "প্রকাশ করুন"}
         </button>
@@ -195,7 +197,7 @@ function Builder() {
               <div className="space-y-3">{[40, 70, 100, 85, 60].map((w, i) => <div key={i} className="h-6 animate-pulse rounded bg-muted" style={{ width: `${w}%` }} />)}</div>
             )}
           </div>
-        ) : showCode ? (
+        ) : showCode && canCode ? (
           <pre className="h-full overflow-auto whitespace-pre-wrap break-all p-4 font-mono text-xs">{html || "<!-- এখনো কোনো কোড নেই -->"}</pre>
         ) : html ? (
           <div className="flex h-full justify-center p-0 md:p-4">

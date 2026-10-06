@@ -59,6 +59,50 @@ export type Database = {
         }
         Relationships: []
       }
+      aura_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          invoice_id: string | null
+          plan_id: string
+          raw: Json
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          plan_id: string
+          raw?: Json
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          invoice_id?: string | null
+          plan_id?: string
+          raw?: Json
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aura_payments_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flag_keywords: {
         Row: {
           created_at: string
@@ -121,10 +165,45 @@ export type Database = {
           },
         ]
       }
+      plan_providers: {
+        Row: {
+          plan_id: string
+          provider_id: string
+        }
+        Insert: {
+          plan_id: string
+          provider_id: string
+        }
+        Update: {
+          plan_id?: string
+          provider_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plan_providers_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_providers_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           allow_custom_domain: boolean
+          can_download: boolean
+          can_publish: boolean
+          can_view_code: boolean
           created_at: string
+          default_provider_id: string | null
+          duration_days: number
           features: string[]
           id: string
           is_default: boolean
@@ -132,12 +211,18 @@ export type Database = {
           name_bn: string
           name_en: string
           price_bdt: number
+          rate_limit_per_minute: number
           show_badge: boolean
           tokens_per_day: number
         }
         Insert: {
           allow_custom_domain?: boolean
+          can_download?: boolean
+          can_publish?: boolean
+          can_view_code?: boolean
           created_at?: string
+          default_provider_id?: string | null
+          duration_days?: number
           features?: string[]
           id?: string
           is_default?: boolean
@@ -145,12 +230,18 @@ export type Database = {
           name_bn: string
           name_en: string
           price_bdt?: number
+          rate_limit_per_minute?: number
           show_badge?: boolean
           tokens_per_day?: number
         }
         Update: {
           allow_custom_domain?: boolean
+          can_download?: boolean
+          can_publish?: boolean
+          can_view_code?: boolean
           created_at?: string
+          default_provider_id?: string | null
+          duration_days?: number
           features?: string[]
           id?: string
           is_default?: boolean
@@ -158,10 +249,19 @@ export type Database = {
           name_bn?: string
           name_en?: string
           price_bdt?: number
+          rate_limit_per_minute?: number
           show_badge?: boolean
           tokens_per_day?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "plans_default_provider_id_fkey"
+            columns: ["default_provider_id"]
+            isOneToOne: false
+            referencedRelation: "ai_providers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -171,6 +271,7 @@ export type Database = {
           is_banned: boolean
           last_reset_date: string
           name: string | null
+          plan_expires_at: string | null
           plan_id: string | null
           tokens_used_today: number
         }
@@ -181,6 +282,7 @@ export type Database = {
           is_banned?: boolean
           last_reset_date?: string
           name?: string | null
+          plan_expires_at?: string | null
           plan_id?: string | null
           tokens_used_today?: number
         }
@@ -191,6 +293,7 @@ export type Database = {
           is_banned?: boolean
           last_reset_date?: string
           name?: string | null
+          plan_expires_at?: string | null
           plan_id?: string | null
           tokens_used_today?: number
         }
@@ -254,6 +357,7 @@ export type Database = {
           announcement_active: boolean
           announcement_color: string
           announcement_text: string
+          aurapay_enabled: boolean
           free_block_publish: boolean
           id: number
           logo_url: string | null
@@ -273,6 +377,7 @@ export type Database = {
           announcement_active?: boolean
           announcement_color?: string
           announcement_text?: string
+          aurapay_enabled?: boolean
           free_block_publish?: boolean
           id?: number
           logo_url?: string | null
@@ -292,6 +397,7 @@ export type Database = {
           announcement_active?: boolean
           announcement_color?: string
           announcement_text?: string
+          aurapay_enabled?: boolean
           free_block_publish?: boolean
           id?: number
           logo_url?: string | null

@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
   component: Settings,
 });
 
-const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "payment_instructions"] as const;
+const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled"] as const;
 
 function Settings() {
   const { data: s } = useSiteSettings();
@@ -55,7 +55,7 @@ function Settings() {
             <Field label="সাপোর্ট ইমেইল"><input className={inputCls} value={f.support_email} onChange={set("support_email")} /></Field>
             <Field label="টেলিগ্রাম লিংক"><input className={inputCls} value={f.telegram_link} onChange={set("telegram_link")} /></Field>
           </div>
-          <Field label="বিকাশ/নগদ পেমেন্ট নির্দেশনা"><textarea rows={3} className={`${inputCls} py-2`} value={f.payment_instructions} onChange={set("payment_instructions")} /></Field>
+          <Toggle label="AuraPay পেমেন্ট চালু" checked={!!f.aurapay_enabled} onChange={(v) => setF({ ...f, aurapay_enabled: v })} />
         </div>
       </Panel>
       <button className={`${btn} min-h-12 w-full bg-brand sm:w-auto`} onClick={save}>সেভ করুন</button>
