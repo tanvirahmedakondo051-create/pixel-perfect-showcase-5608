@@ -16,6 +16,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as PaymentSuccessRouteImport } from './routes/payment.success'
 import { Route as SSubdomainRouteImport } from './routes/s.$subdomain'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
@@ -27,6 +28,7 @@ import { Route as AuthenticatedAdminProvidersRouteImport } from './routes/_authe
 import { Route as AuthenticatedAdminSettingsRouteImport } from './routes/_authenticated/admin.settings'
 import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authenticated/admin.users'
 import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_authenticated/builder.$projectId'
+import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
 
 const IndexRoute = IndexRouteImport.update({
@@ -62,6 +64,11 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const PaymentSuccessRoute = PaymentSuccessRouteImport.update({
+  id: '/payment/success',
+  path: '/payment/success',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SSubdomainRoute = SSubdomainRouteImport.update({
   id: '/s/$subdomain',
@@ -125,6 +132,11 @@ const AuthenticatedBuilderProjectIdRoute =
     path: '/builder/$projectId',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const ApiPublicAurapayWebhookRoute = ApiPublicAurapayWebhookRouteImport.update({
+  id: '/api/public/aurapay-webhook',
+  path: '/api/public/aurapay-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicGenerateRoute = ApiPublicGenerateRouteImport.update({
   id: '/api/public/generate',
   path: '/api/public/generate',
@@ -138,6 +150,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
@@ -148,6 +161,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
+  '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
 }
@@ -157,6 +171,7 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/signup': typeof SignupRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
@@ -167,6 +182,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/admin/users': typeof AuthenticatedAdminUsersRoute
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
+  '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
 }
@@ -179,6 +195,7 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
   '/_authenticated/admin/limits': typeof AuthenticatedAdminLimitsRoute
@@ -189,6 +206,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/settings': typeof AuthenticatedAdminSettingsRoute
   '/_authenticated/admin/users': typeof AuthenticatedAdminUsersRoute
   '/_authenticated/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
+  '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
 }
@@ -201,6 +219,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/admin'
     | '/dashboard'
+    | '/payment/success'
     | '/s/$subdomain'
     | '/admin/analytics'
     | '/admin/limits'
@@ -211,6 +230,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/builder/$projectId'
+    | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
@@ -220,6 +240,7 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/signup'
     | '/dashboard'
+    | '/payment/success'
     | '/s/$subdomain'
     | '/admin/analytics'
     | '/admin/limits'
@@ -230,6 +251,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/builder/$projectId'
+    | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/admin'
   id:
@@ -241,6 +263,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/_authenticated/admin'
     | '/_authenticated/dashboard'
+    | '/payment/success'
     | '/s/$subdomain'
     | '/_authenticated/admin/analytics'
     | '/_authenticated/admin/limits'
@@ -251,6 +274,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/settings'
     | '/_authenticated/admin/users'
     | '/_authenticated/builder/$projectId'
+    | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/_authenticated/admin/'
   fileRoutesById: FileRoutesById
@@ -261,7 +285,9 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PricingRoute: typeof PricingRoute
   SignupRoute: typeof SignupRoute
+  PaymentSuccessRoute: typeof PaymentSuccessRoute
   SSubdomainRoute: typeof SSubdomainRoute
+  ApiPublicAurapayWebhookRoute: typeof ApiPublicAurapayWebhookRoute
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
 }
 
@@ -315,6 +341,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/payment/success': {
+      id: '/payment/success'
+      path: '/payment/success'
+      fullPath: '/payment/success'
+      preLoaderRoute: typeof PaymentSuccessRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/s/$subdomain': {
       id: '/s/$subdomain'
@@ -393,6 +426,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedBuilderProjectIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/aurapay-webhook': {
+      id: '/api/public/aurapay-webhook'
+      path: '/api/public/aurapay-webhook'
+      fullPath: '/api/public/aurapay-webhook'
+      preLoaderRoute: typeof ApiPublicAurapayWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/generate': {
       id: '/api/public/generate'
       path: '/api/public/generate'
@@ -451,7 +491,9 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PricingRoute: PricingRoute,
   SignupRoute: SignupRoute,
+  PaymentSuccessRoute: PaymentSuccessRoute,
   SSubdomainRoute: SSubdomainRoute,
+  ApiPublicAurapayWebhookRoute: ApiPublicAurapayWebhookRoute,
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
 }
 export const routeTree = rootRouteImport

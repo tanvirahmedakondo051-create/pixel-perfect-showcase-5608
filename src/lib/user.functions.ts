@@ -4,20 +4,17 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const listActiveProviders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async () => {
+  .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data } = await supabaseAdmin
-      .from("ai_providers")
-      .select("id, name, model, is_default")
-      .eq("is_active", true)
-      .order("is_default", { ascending: false })
-      .order("sort_order");
-    return data ?? [];
+    const { effectivePlan, allowedProviders } = await import("./plan.server");
+    const prof = await effectivePlan(supabaseAdmin, context.userId);
+    const list = await allowedProviders(supabaseAdmin, prof?.plans);
+    return list.map((p: any) => ({ id: p.id as string, name: p.name as string, model: p.model as string, is_default: p.is_default as boolean }));
   });
 
 async function planFor(supabase: any, userId: string) {
   const { data } = await supabase.from("profiles").select("is_banned, plans(*)").eq("id", userId).single();
-  return data as { is_banned: boolean; plans: { max_projects: number; show_badge: boolean; price_bdt: number } | null } | null;
+  return data as { is_banned: boolean; plans: { max_projects: number; show_badge: boolean; price_bdt: number; can_publish: boolean } | null } | null;
 }
 
 export const createProject = createServerFn({ method: "POST" })
@@ -63,6 +60,7 @@ export const setPublished = createServerFn({ method: "POST" })
     if (proj.is_flagged) return { error: "এই প্রজেক্টটি পর্যালোচনার অপেক্ষায় আছে, এখন প্রকাশ করা যাবে না" };
     const prof = await planFor(supabase, userId);
     if (prof?.is_banned) return { error: "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে" };
+    if (prof?.plans && prof.plans.can_publish === false) return { error: "আপনার প্ল্যানে প্রকাশ করার সুবিধা নেই। আপগ্রেড করুন।" };
     const { data: settings } = await supabase.from("site_settings").select("free_block_publish").eq("id", 1).single();
     if (settings?.free_block_publish && (prof?.plans?.price_bdt ?? 0) === 0) return { error: "ফ্রি প্ল্যানে প্রকাশ বন্ধ আছে। প্রকাশ করতে Pro নিন।" };
     const subdomain = proj.subdomain ?? slug(proj.name);

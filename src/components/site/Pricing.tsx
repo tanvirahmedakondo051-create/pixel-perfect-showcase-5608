@@ -3,13 +3,24 @@ import { useState } from "react";
 import { Check } from "lucide-react";
 import { usePlans } from "@/lib/site";
 import { bn, useSession } from "@/lib/auth";
-import { PaymentDialog } from "./PaymentDialog";
+import { useServerFn } from "@tanstack/react-start";
+import { toast } from "sonner";
+import { createAuraPayment } from "@/lib/aurapay.functions";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export function PricingCards() {
   const { data: plans } = usePlans();
   const { user } = useSession();
-  const [buy, setBuy] = useState<{ id: string; name: string; price: number } | null>(null);
+  const create = useServerFn(createAuraPayment);
+  const [busy, setBusy] = useState<string | null>(null);
+  const buy = async (planId: string) => {
+    setBusy(planId);
+    try {
+      const r = await create({ data: { planId } });
+      if ("error" in r) { toast.error(r.error); setBusy(null); return; }
+      window.location.href = r.url;
+    } catch { toast.error("পেমেন্ট শুরু করা যায়নি"); setBusy(null); }
+  };
   if (!plans) return <div className="grid gap-4 md:grid-cols-2">{[0, 1].map((i) => <div key={i} className="glass h-96 animate-pulse rounded-2xl" />)}</div>;
   return (
     <>
@@ -36,8 +47,8 @@ export function PricingCards() {
                   ফ্রি শুরু করুন
                 </Link>
               ) : user ? (
-                <button onClick={() => setBuy({ id: p.id, name: p.name_bn, price: p.price_bdt })} className="mt-8 flex min-h-12 w-full items-center justify-center rounded-xl bg-brand font-semibold">
-                  {p.name_bn} নিন
+                <button disabled={busy === p.id} onClick={() => buy(p.id)} className="mt-8 disabled:opacity-60 flex min-h-12 w-full items-center justify-center rounded-xl bg-brand font-semibold">
+                  {busy === p.id ? "অপেক্ষা করুন..." : `${p.name_bn} নিন`}
                 </button>
               ) : (
                 <Link to="/signup" className="mt-8 flex min-h-12 items-center justify-center rounded-xl bg-brand font-semibold">
@@ -48,7 +59,6 @@ export function PricingCards() {
           );
         })}
       </div>
-      {buy && <PaymentDialog plan={buy} onClose={() => setBuy(null)} />}
     </>
   );
 }
