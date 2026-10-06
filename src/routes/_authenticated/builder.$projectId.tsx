@@ -9,6 +9,7 @@ import { bn, tokensToday, useProfile, useSession } from "@/lib/auth";
 import { listActiveProviders, setPublished } from "@/lib/user.functions";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PREVIEW_MS } from "@/lib/hosting";
 
 export const Route = createFileRoute("/_authenticated/builder/$projectId")({
   head: () => ({ meta: [{ title: "বিল্ডার — Hexa AI" }, { name: "description", content: "AI দিয়ে ওয়েবসাইট বানান।" }] }),
@@ -65,6 +66,13 @@ function Builder() {
   useEffect(() => {
     taRef.current?.focus();
   }, []);
+  const [previewOff, setPreviewOff] = useState(false);
+  const [previewSession, setPreviewSession] = useState(0);
+  useEffect(() => {
+    setPreviewOff(false);
+    const t = setTimeout(() => setPreviewOff(true), PREVIEW_MS);
+    return () => clearTimeout(t);
+  }, [html, previewSession]);
 
   const plan = profile?.plans as { tokens_per_day: number; can_download?: boolean; can_view_code?: boolean } | null;
   const canDownload = plan?.can_download !== false;
@@ -199,6 +207,15 @@ function Builder() {
           </div>
         ) : showCode && canCode ? (
           <pre className="h-full overflow-auto whitespace-pre-wrap break-all p-4 font-mono text-xs">{html || "<!-- এখনো কোনো কোড নেই -->"}</pre>
+        ) : html && previewOff ? (
+          <div className="grid h-full place-items-center p-6 text-center">
+            <div>
+              <Eye className="mx-auto mb-3 size-10 opacity-40" />
+              <p className="font-semibold">প্রিভিউ বন্ধ হয়েছে</p>
+              <p className="mt-1 text-sm text-muted-foreground">৫ মিনিট কোনো কাজ না হওয়ায় প্রিভিউ বন্ধ করা হয়েছে।</p>
+              <button onClick={() => setPreviewSession((n) => n + 1)} className="mt-4 inline-flex min-h-12 items-center rounded-xl bg-brand px-5 font-semibold text-primary-foreground">রিফ্রেশ করুন</button>
+            </div>
+          </div>
         ) : html ? (
           <div className="flex h-full justify-center p-0 md:p-4">
             <iframe title="প্রিভিউ" srcDoc={html} sandbox="allow-scripts allow-forms allow-popups" className={`h-full border-0 bg-white ${device === "mobile" ? "w-[375px] max-w-full rounded-xl md:shadow-glow" : "w-full md:rounded-xl"}`} />

@@ -77,6 +77,19 @@ function Dashboard() {
       <AppHeader />
       <main className="mx-auto grid max-w-6xl gap-6 px-4 py-8 lg:grid-cols-[1fr_280px]">
         <section>
+          {(() => {
+            const pr: any = profile;
+            const st = hostingStatus({ planExpiresAt: pr?.plan_expires_at ?? null, planEndedAt: pr?.plan_ended_at ?? null, fallbackCanHost: false });
+            if (st.state === "active") return null;
+            return (
+              <div className="mb-5 rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm">
+                {st.state === "grace"
+                  ? <>আপনার প্যাকেজের মেয়াদ শেষ। আপগ্রেড বা রিনিউ না করলে <b>{bn(st.daysLeft)} দিন</b> পর প্রকাশিত ওয়েবসাইটগুলো বন্ধ হয়ে যেতে পারে।</>
+                  : <>আপনার প্যাকেজের মেয়াদ শেষ, ফ্রি প্যাকেজে হোস্টিং না থাকলে ওয়েবসাইট বন্ধ আছে।</>}{" "}
+                <Link to="/pricing" className="font-semibold text-cyan">প্যাকেজ আপগ্রেড করুন</Link>
+              </div>
+            );
+          })()}
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-2xl font-bold">আমার প্রজেক্ট</h1>
             <button disabled={busy} onClick={() => newProject()} className="flex min-h-12 items-center gap-2 rounded-xl bg-brand px-4 font-semibold shadow-glow disabled:opacity-60">
