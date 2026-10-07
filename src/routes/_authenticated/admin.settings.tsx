@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { adminGetAuraKey, adminSetAuraKey, adminGetDeployToken, adminNewDeployToken, adminTestAgent } from "@/lib/admin.functions";
+import { adminGetAuraKey, adminSetAuraKey, adminGetDeployToken, adminNewDeployToken, adminTestAgent, adminGetBackendKey, adminSetBackendKey } from "@/lib/admin.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/site";
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
   component: Settings,
 });
 
-const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled", "ns1", "ns2", "ns3", "ns4", "server_ip", "hosting_domain", "grace_days", "delete_after_days", "support_whatsapp", "agent_host", "agent_port"] as const;
+const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled", "ns1", "ns2", "ns3", "ns4", "server_ip", "hosting_domain", "grace_days", "delete_after_days", "support_whatsapp", "agent_host", "agent_port", "backend_max_tables", "backend_max_rows", "backend_master_url"] as const;
 
 function Settings() {
   const { data: s } = useSiteSettings();
@@ -25,7 +25,7 @@ function Settings() {
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
 
   async function save() {
-    const { error } = await supabase.from("site_settings").update({ ...f, logo_url: f.logo_url || null, grace_days: Math.max(1, Number(f.grace_days) || 7), delete_after_days: Math.max(Number(f.grace_days) || 7, Number(f.delete_after_days) || 30), agent_port: Number(f.agent_port) || 8443 } as any).eq("id", 1);
+    const { error } = await supabase.from("site_settings").update({ ...f, logo_url: f.logo_url || null, grace_days: Math.max(1, Number(f.grace_days) || 7), delete_after_days: Math.max(Number(f.grace_days) || 7, Number(f.delete_after_days) || 30), agent_port: Number(f.agent_port) || 8443, backend_max_tables: Math.max(1, Number(f.backend_max_tables) || 10), backend_max_rows: Math.max(100, Number(f.backend_max_rows) || 10000) } as any).eq("id", 1);
     if (error) return toast.error("সেভ করা যায়নি");
     qc.invalidateQueries({ queryKey: ["site-settings"] });
     toast.success("সেটিংস সেভ হয়েছে");
@@ -65,6 +65,17 @@ function Settings() {
       <Panel title="সার্ভার (অটো ডিপ্লয়)">
         <DeployServer f={f} set={set} />
       </Panel>
+      <Panel title="ব্যাকএন্ড (ইউজারদের সাইটের ডেটাবেস)">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">ইউজারের সাইটে লগইন/ফর্ম/ডেটা সেভ লাগলে প্ল্যাটফর্মের নিজস্ব ডেটাবেসে আলাদা আলাদা টেবিল তৈরি হয় — এখনই কাজ করে, কিছু সেটআপ লাগে না। ভবিষ্যতে আলাদা মাস্টার প্রজেক্ট ব্যবহারের জন্য নিচের তথ্য রাখতে পারেন (ঐচ্ছিক)।</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="প্রতি প্রজেক্টে সর্বোচ্চ টেবিল"><input type="number" min={1} className={inputCls} value={f.backend_max_tables} onChange={set("backend_max_tables")} /></Field>
+            <Field label="প্রতি টেবিলে সর্বোচ্চ রো"><input type="number" min={100} className={inputCls} value={f.backend_max_rows} onChange={set("backend_max_rows")} /></Field>
+            <Field label="মাস্টার প্রজেক্ট URL (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.backend_master_url} onChange={set("backend_master_url")} placeholder="https://xxxx.supabase.co" /></Field>
+          </div>
+          <BackendKey />
+        </div>
+      </Panel>
       <Panel title="প্ল্যানের মেয়াদ শেষ হলে">
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">মেয়াদ শেষের পর প্রথম কয়েক দিন সাইটের জায়গায় শুধু "প্ল্যান আপগ্রেড করুন" পেজ দেখাবে, তারপর সাইট বন্ধ থাকবে, শেষে সাইটের ফাইল ও ডেটা স্থায়ীভাবে মুছে যাবে।</p>
@@ -89,6 +100,26 @@ function Settings() {
       </Panel>
       <button className={`${btn} min-h-12 w-full bg-brand sm:w-auto`} onClick={save}>সেভ করুন</button>
     </div>
+  );
+}
+
+function BackendKey() {
+  const get = useServerFn(adminGetBackendKey);
+  const setKey = useServerFn(adminSetBackendKey);
+  const { data, refetch } = useQuery({ queryKey: ["backend-key"], queryFn: () => get() });
+  const [v, setV] = useState("");
+  return (
+    <Field label={`মাস্টার Service Key ${data?.masked ? `(বর্তমান: ${data.masked})` : "(ঐচ্ছিক)"}`}>
+      <div className="flex gap-2">
+        <input className={`${inputCls} font-en`} type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="নতুন Key বসান" />
+        <button className={`${btn} bg-brand shrink-0`} onClick={async () => {
+          if (v.trim().length < 8) return toast.error("সঠিক Key দিন");
+          const r = await setKey({ data: { key: v } });
+          if ("error" in r) return toast.error(r.error);
+          setV(""); refetch(); toast.success("সেভ হয়েছে");
+        }}>সেভ</button>
+      </div>
+    </Field>
   );
 }
 
