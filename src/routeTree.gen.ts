@@ -31,6 +31,7 @@ import { Route as AuthenticatedAdminUsersRouteImport } from './routes/_authentic
 import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_authenticated/builder.$projectId'
 import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
+import { Route as ApiPublicJobStatusRouteImport } from './routes/api/public/job-status'
 import { Route as ApiPublicSiteRouteImport } from './routes/api/public/site'
 import { Route as OauthGithubReturnRouteImport } from './routes/oauth.github.return'
 import { Route as UploadsProjectIdFileRouteImport } from './routes/uploads.$projectId.$file'
@@ -158,6 +159,11 @@ const ApiPublicGenerateRoute = ApiPublicGenerateRouteImport.update({
   path: '/api/public/generate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicJobStatusRoute = ApiPublicJobStatusRouteImport.update({
+  id: '/api/public/job-status',
+  path: '/api/public/job-status',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
   id: '/api/public/site',
   path: '/api/public/site',
@@ -224,6 +230,7 @@ export interface FileRoutesByFullPath {
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/job-status': typeof ApiPublicJobStatusRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
   '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
@@ -254,6 +261,7 @@ export interface FileRoutesByTo {
   '/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/job-status': typeof ApiPublicJobStatusRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
   '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
@@ -287,6 +295,7 @@ export interface FileRoutesById {
   '/_authenticated/builder/$projectId': typeof AuthenticatedBuilderProjectIdRoute
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
+  '/api/public/job-status': typeof ApiPublicJobStatusRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
   '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/job-status'
     | '/api/public/site'
     | '/oauth/github/return'
     | '/uploads/$projectId/$file'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/job-status'
     | '/api/public/site'
     | '/oauth/github/return'
     | '/uploads/$projectId/$file'
@@ -382,6 +393,7 @@ export interface FileRouteTypes {
     | '/_authenticated/builder/$projectId'
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
+    | '/api/public/job-status'
     | '/api/public/site'
     | '/oauth/github/return'
     | '/uploads/$projectId/$file'
@@ -403,6 +415,7 @@ export interface RootRouteChildren {
   SSubdomainRoute: typeof SSubdomainRoute
   ApiPublicAurapayWebhookRoute: typeof ApiPublicAurapayWebhookRoute
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
+  ApiPublicJobStatusRoute: typeof ApiPublicJobStatusRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   OauthGithubReturnRoute: typeof OauthGithubReturnRoute
   UploadsProjectIdFileRoute: typeof UploadsProjectIdFileRoute
@@ -567,6 +580,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicGenerateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/job-status': {
+      id: '/api/public/job-status'
+      path: '/api/public/job-status'
+      fullPath: '/api/public/job-status'
+      preLoaderRoute: typeof ApiPublicJobStatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/site': {
       id: '/api/public/site'
       path: '/api/public/site'
@@ -684,6 +704,7 @@ const rootRouteChildren: RootRouteChildren = {
   SSubdomainRoute: SSubdomainRoute,
   ApiPublicAurapayWebhookRoute: ApiPublicAurapayWebhookRoute,
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
+  ApiPublicJobStatusRoute: ApiPublicJobStatusRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   OauthGithubReturnRoute: OauthGithubReturnRoute,
   UploadsProjectIdFileRoute: UploadsProjectIdFileRoute,

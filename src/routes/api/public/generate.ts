@@ -8,6 +8,7 @@ const Body = z.object({
   mode: z.enum(["plan", "build"]).optional().default("build"),
   intent: z.enum(["run", "ask"]).optional().default("run"),
   resumeId: z.string().uuid().optional().nullable(),
+  chained: z.boolean().optional(),
   attachments: z.array(z.object({ path: z.string().max(200), url: z.string().url().max(400), name: z.string().max(120), type: z.string().max(60) })).max(4).optional().default([]),
 });
 
@@ -175,7 +176,8 @@ export const Route = createFileRoute("/api/public/generate")({
           return json(status, msg);
         };
         const ac = new AbortController();
-        const sig = AbortSignal.any([request.signal, ac.signal]);
+        // Job runner ignores its caller disconnecting: only an explicit cancel stops it.
+        const sig = jobId ? ac.signal : AbortSignal.any([request.signal, ac.signal]);
 
         const { effectivePlan, allowedProviders } = await import("@/lib/plan.server");
         const [profile, { data: settings }, { data: project }] = await Promise.all([
@@ -222,7 +224,7 @@ export const Route = createFileRoute("/api/public/generate")({
         // Browser call: queue a background job and return at once. The database starts the runner, so closing the tab doesn't stop it.
         if (!job && body.intent !== "ask") {
           const { data: running } = await db.from("generation_jobs").select("id").eq("project_id", project.id).in("status", ["queued", "running"]).gte("heartbeat_at", new Date(Date.now() - 120_000).toISOString()).limit(1).maybeSingle();
-          if (running) return Response.json({ jobId: running.id, existing: true });
+          if (running) return Response.json({ jobId: running.id, existing: true }, { status: 202 });
           const { appOrigin: ao } = await import("@/lib/origin.server");
           let origin = ao();
           const pm = origin.match(/^https:\/\/id-preview--([0-9a-f-]{36})\.lovable\.app$/);
@@ -230,7 +232,7 @@ export const Route = createFileRoute("/api/public/generate")({
           const { data: nj, error: je } = await db.from("generation_jobs").insert({ project_id: project.id, user_id: user.id, mode: body.mode, input: body as any, origin }).select("id").single();
           if (je || !nj) return json(500, "সার্ভারে সমস্যা হয়েছে");
           await db.rpc("kick_job" as any, { _id: nj.id } as any);
-          return Response.json({ jobId: nj.id });
+          return Response.json({ jobId: nj.id }, { status: 202 });
         }
 
         // Asset library: only for new builds, short list of small/URL assets (keeps system prompt small).
@@ -620,6 +622,19 @@ export const Route = createFileRoute("/api/public/generate")({
                 lastCp = cp?.id ?? lastCp;
                 await db.from("projects").update({ code_html: clean }).eq("id", project.id);
                 send({ t: "checkpoint", id: lastCp, percent: pct, done: done.length, total, html: clean });
+                // Background job: one step per request. Save progress, then start a fresh short request for the next step.
+                if (job && done.length < total && !sig.aborted) {
+                  const { data: ncp } = await db.from("task_checkpoints").insert({ project_id: project.id, user_id: user.id, task_id: taskId, progress_percent: pct, completed_steps: done, pending_steps: steps.slice(done.length), partial_html: partial, prompt, status: "paused" } as any).select("id").single();
+                  if (ncp?.id) {
+                    await db.from("projects").update({ messages: baseHistory, ...(project.name === "নতুন প্রজেক্ট" && !history.length ? { name: prompt.slice(0, 40) } : {}) }).eq("id", project.id);
+                    await db.from("generation_jobs").update({ input: { ...(job.input as any), resumeId: ncp.id, mode: "build", chained: true }, attempts: 0 }).eq("id", job.id);
+                    finalStatus = "running";
+                    flushJob(); await chain;
+                    const { data: st } = await db.from("generation_jobs").select("status").eq("id", job.id).maybeSingle();
+                    if (st?.status !== "cancelled") await db.rpc("kick_job" as any, { _id: job.id } as any);
+                    return controller.close();
+                  }
+                }
               }
               html = partial.replace(MARK, "");
             } else if (diffMessages) {
@@ -658,7 +673,7 @@ export const Route = createFileRoute("/api/public/generate")({
             const now = new Date().toISOString();
             const unpaid = Math.max(0, tokens - Math.round(chargedCoins * tpc));
             const finalCoins = r2(chargedCoins + unpaid / tpc);
-            const am: Msg = { role: "assistant", content: html ? (resumeCp ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
+            const am: Msg = { role: "assistant", content: html ? (resumeCp && !body.chained ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
             const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
             if (html && (project as any).backend_enabled) html = injectBackend(html, appOrigin(), project.id);
