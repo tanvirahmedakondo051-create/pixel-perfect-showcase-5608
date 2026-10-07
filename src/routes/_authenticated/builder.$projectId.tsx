@@ -311,7 +311,7 @@ function Builder() {
             <div ref={endRef} />
           </div>
 
-          <div className={`border-t border-border bg-background/80 p-3 ${tab !== "chat" ? "hidden" : ""} pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className={`border-t border-border bg-background/80 p-3 ${tab !== "chat" ? "hidden" : ""} pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
             <div className="flex items-end gap-2 rounded-2xl border border-input bg-card p-2 focus-within:border-cyan">
               <textarea
                 ref={taRef}
