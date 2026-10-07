@@ -24,6 +24,11 @@ import { listActiveProviders, setPublished } from "@/lib/user.functions";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PREVIEW_MS } from "@/lib/hosting";
+import { BackendDialog, FilesDialog } from "@/components/app/BackendDialog";
+import { setupBackend, setProjectType } from "@/lib/backend.functions";
+import { Database, FolderTree } from "lucide-react";
+
+const BE_RE = /লগইন|লগ ইন|সাইন ?আপ|ডেটাবেস|ডাটাবেস|সেভ|অর্ডার|বুকিং|রেজিস্ট্রেশন|ফর্ম জমা|login|sign ?up|database|save|register|booking/i;
 
 export const Route = createFileRoute("/_authenticated/builder/$projectId")({
   head: () => ({ meta: [{ title: "বিল্ডার — Hexa AI" }, { name: "description", content: "AI দিয়ে ওয়েবসাইট বানান।" }] }),
@@ -83,6 +88,12 @@ function Builder() {
   const [verOpen, setVerOpen] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
+  const [beOpen, setBeOpen] = useState(false);
+  const [filesOpen, setFilesOpen] = useState(false);
+  const [beSuggest, setBeSuggest] = useState<string | null>(null);
+  const [beBusy, setBeBusy] = useState(false);
+  const doSetup = useServerFn(setupBackend);
+  const doType = useServerFn(setProjectType);
   const isMobile = useIsMobile();
   const { data: packs } = useSkillPacks();
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -165,6 +176,7 @@ function Builder() {
     const files = atts;
     setInput(""); setAtts([]);
     const text0 = prompt || "এই ফাইলগুলো ওয়েবসাইটে ব্যবহার করো";
+    if (m0 === "build" && !(project as any)?.backend_enabled && BE_RE.test(prompt)) setBeSuggest(prompt);
     pendingRef.current = { prompt: text0, mode: m0, files };
     if (m0 === "build" && !html && prompt.length < 400 && !files.length) {
       setProg({ step: "অনুরোধ বুঝছি...", tokens: 0, start: Date.now(), last: Date.now() });
@@ -240,6 +252,7 @@ function Builder() {
             if (ev.error) toast.error(ev.error); else toast.info("⏸️ কয়েন শেষ — কাজ থামানো হয়েছে, চেকপয়েন্ট সেভ আছে");
             qc.invalidateQueries({ queryKey: ["profile"] });
           }
+          else if (ev.t === "files") toast.info(`📁 ${bn(ev.files.length)}টি ফাইল তৈরি হয়েছে — বিল্ড শুরু`);
           else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
           else if (ev.t === "error") toast.error(ev.msg);
           else if (ev.t === "done") {
@@ -377,6 +390,8 @@ function Builder() {
       </div>
       <div className="ml-auto flex flex-wrap justify-end gap-1">
         <button onClick={() => setGhOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="GitHub"><Github className="size-4" /><span className="hidden sm:inline">GitHub</span></button>
+        <button onClick={() => setBeOpen(true)} className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent ${(project as any)?.backend_enabled ? "text-cyan" : ""}`} aria-label="ব্যাকএন্ড"><Database className="size-4" /><span className="hidden sm:inline">ব্যাকএন্ড</span></button>
+        {(project as any)?.project_type === "react" && <button onClick={() => setFilesOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="ফাইল"><FolderTree className="size-4" /><span className="hidden lg:inline">ফাইল</span></button>}
         <button onClick={() => setCpOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="চেকপয়েন্ট"><RotateCcw className="size-4" /><span className="hidden lg:inline">চেকপয়েন্ট</span></button>
         {published.on && <button onClick={() => setVerOpen(true)} className="grid size-11 place-items-center rounded-lg hover:bg-accent" aria-label="ভার্সন ইতিহাস"><History className="size-4" /></button>}
         {published.on && changes > 0 && (
@@ -483,6 +498,38 @@ function Builder() {
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
                 <p className="mt-1 text-sm text-muted-foreground">ধরন বাছাই করলে AI সেই বিষয়ে বিশেষজ্ঞের মতো বানাবে</p>
                 <div className="mt-5"><SkillGrid /></div>
+                <p className="mt-6 text-sm font-semibold">প্রজেক্টের ধরন</p>
+                <div className="mx-auto mt-2 grid max-w-sm grid-cols-2 gap-2">
+                  {([["html", "🌐 সিঙ্গেল HTML", "দ্রুত, সাধারণ সাইট"], ["react", "⚛️ React + Vite", "বড় মাল্টি-ফাইল অ্যাপ"]] as const).map(([k, l, d]) => {
+                    const active = ((project as any)?.project_type ?? "html") === k;
+                    return (
+                      <button key={k} onClick={async () => { if (active) return; const r = await doType({ data: { projectId, type: k } }); if ("error" in r) return toast.error(r.error); qc.invalidateQueries({ queryKey: ["project", projectId] }); toast.success(k === "react" ? "React + Vite মোড চালু" : "সিঙ্গেল HTML মোড"); }}
+                        className={`glass min-h-16 rounded-2xl px-3 py-2 text-sm ${active ? "border-cyan text-cyan" : "hover:border-primary"}`}>
+                        <span className="block font-semibold">{l}</span><span className="block text-[11px] text-muted-foreground">{d}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {beSuggest && !(project as any)?.backend_enabled && (
+              <div className="rounded-2xl border border-cyan/40 bg-cyan/10 p-3 text-sm">
+                <p className="font-semibold">⚡ ব্যাকএন্ড লাগবে?</p>
+                <p className="mt-1 text-xs text-muted-foreground">আপনার অনুরোধে লগইন/ডেটা সেভ আছে মনে হচ্ছে। এক ক্লিকে ডেটাবেস টেবিল তৈরি হবে, তারপর AI সেটা ব্যবহার করে কোড লিখবে।</p>
+                <div className="mt-2 flex gap-2">
+                  <button disabled={beBusy} onClick={async () => {
+                    setBeBusy(true);
+                    try {
+                      const r = await doSetup({ data: { projectId, prompt: beSuggest } });
+                      if ("error" in r) return toast.error(r.error);
+                      toast.success(`✅ ব্যাকএন্ড চালু — ${bn(r.created.length)}টি টেবিল`);
+                      const again = beSuggest; setBeSuggest(null);
+                      qc.invalidateQueries({ queryKey: ["project", projectId] }); qc.invalidateQueries({ queryKey: ["profile"] });
+                      if (html) send(`ব্যাকএন্ড টেবিলগুলো ব্যবহার করে এটা কাজ করাও: ${again}`, "build");
+                    } finally { setBeBusy(false); }
+                  }} className="flex min-h-10 items-center gap-1.5 rounded-xl bg-brand px-3 text-sm font-semibold disabled:opacity-60">{beBusy ? <Loader2 className="size-4 animate-spin" /> : <Zap className="size-4" />}অটো সেটআপ</button>
+                  <button onClick={() => setBeSuggest(null)} className="min-h-10 rounded-xl border border-border px-3 text-sm">না, দরকার নেই</button>
+                </div>
               </div>
             )}
             {expiring > 0 && <p className="rounded-xl border border-border bg-card/50 p-2.5 text-xs text-muted-foreground">⏳ {bn(expiring)}টি থেমে থাকা কাজের চেকপয়েন্ট আগামী ২৪ ঘণ্টায় মুছে যাবে — এখনই চালিয়ে যান।</p>}
@@ -609,6 +656,8 @@ function Builder() {
             confirmCost();
           }} />
           <EstimateDialog est={est} balance={coins} onCancel={() => { setEst(null); const p = pendingRef.current; if (p) setInput(p.prompt); pendingRef.current = null; }} onStart={() => { setEst(null); const p = pendingRef.current; pendingRef.current = null; if (p) exec(p.prompt, p.mode, p.files); }} />
+          <BackendDialog open={beOpen} onOpenChange={setBeOpen} projectId={projectId} onChanged={() => { qc.invalidateQueries({ queryKey: ["project", projectId] }); qc.invalidateQueries({ queryKey: ["profile"] }); }} />
+          <FilesDialog open={filesOpen} onOpenChange={setFilesOpen} files={((project as any)?.files as any[]) ?? []} />
           <CheckpointsDialog open={cpOpen} onOpenChange={setCpOpen} projectId={projectId} onRollback={(h) => { setHtml(h); qc.invalidateQueries({ queryKey: ["project", projectId] }); }} />
           <Dialog open={skillOpen} onOpenChange={setSkillOpen}>
             <DialogContent><DialogHeader><DialogTitle>সাইটের ধরন বেছে নিন</DialogTitle></DialogHeader><SkillGrid /></DialogContent>
