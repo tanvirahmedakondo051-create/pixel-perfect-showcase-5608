@@ -234,7 +234,15 @@ export const Route = createFileRoute("/api/public/generate")({
           const { data: nj, error: je } = await db.from("generation_jobs").insert({ project_id: project.id, user_id: user.id, mode: body.mode, input: body as any, origin }).select("id").single();
           if (je || !nj) return json(500, "সার্ভারে সমস্যা হয়েছে");
           console.log("[job] created", nj.id, "origin", origin);
-          await db.rpc("kick_job" as any, { _id: nj.id } as any);
+          try {
+            const { error: ke } = await db.rpc("kick_job" as any, { _id: nj.id } as any);
+            if (ke) throw ke;
+          } catch (e) {
+            const msg = "সার্ভার কাজটি শুরু করতে পারেনি। আবার চেষ্টা করুন।";
+            console.error("[job] kick failed", nj.id, origin, e);
+            try { await db.rpc("job_push" as any, { _id: nj.id, _events: [{ t: "error", msg }], _status: "error" } as any); } catch {}
+            return json(503, msg);
+          }
           return Response.json({ jobId: nj.id }, { status: 202 });
         }
 
