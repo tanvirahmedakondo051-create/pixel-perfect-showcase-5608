@@ -184,7 +184,7 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         let extra = "";
         if (atts.length) extra += `\n\nUSER UPLOADED FILES (use these exact URLs in the site when relevant, e.g. as <img src>):\n${atts.map((a) => `- ${a.name} (${a.type}): ${a.url}`).join("\n")}`;
-        const link = body.prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
+        const link = prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
         if (link) {
           const { analyzeUrl, analysisContext } = await import("@/lib/analyze.server");
           const r = await analyzeUrl(link).catch(() => null);
@@ -203,26 +203,26 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
         const hasSite = !isPlan && !!project.code_html;
-        const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
+        const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
 
         const planMessages = [
           { role: "system", content: (s2.plan_prompt ?? "") + skillCtx + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
           ...summaryMsg,
           ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: withExtra(body.prompt) },
+          { role: "user", content: withExtra(prompt) },
         ];
         const diffMessages = hasSite ? [
           { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${body.prompt}`) },
+          { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${prompt}`) },
         ] : null;
         const fullMessages = [
           { role: "system", content: buildSystem },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : body.prompt) },
+          { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : prompt) },
         ];
 
         const enc = new TextEncoder();
