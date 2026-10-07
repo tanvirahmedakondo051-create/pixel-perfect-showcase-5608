@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { adminGetAuraKey, adminSetAuraKey } from "@/lib/admin.functions";
+import { adminGetAuraKey, adminSetAuraKey, adminGetDeployToken, adminNewDeployToken, adminTestAgent } from "@/lib/admin.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/site";
@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/admin/settings")({
   component: Settings,
 });
 
-const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled", "ns1", "ns2", "ns3", "ns4", "server_ip", "hosting_domain"] as const;
+const keys = ["site_name", "tagline", "logo_url", "announcement_text", "announcement_color", "announcement_active", "maintenance_mode", "support_email", "telegram_link", "aurapay_enabled", "ns1", "ns2", "ns3", "ns4", "server_ip", "hosting_domain", "grace_days", "delete_after_days", "support_whatsapp", "agent_host", "agent_port"] as const;
 
 function Settings() {
   const { data: s } = useSiteSettings();
@@ -25,7 +25,7 @@ function Settings() {
   const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
 
   async function save() {
-    const { error } = await supabase.from("site_settings").update({ ...f, logo_url: f.logo_url || null }).eq("id", 1);
+    const { error } = await supabase.from("site_settings").update({ ...f, logo_url: f.logo_url || null, grace_days: Math.max(1, Number(f.grace_days) || 7), delete_after_days: Math.max(Number(f.grace_days) || 7, Number(f.delete_after_days) || 30), agent_port: Number(f.agent_port) || 8443 } as any).eq("id", 1);
     if (error) return toast.error("সেভ করা যায়নি");
     qc.invalidateQueries({ queryKey: ["site-settings"] });
     toast.success("সেটিংস সেভ হয়েছে");
@@ -56,9 +56,22 @@ function Settings() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="সাপোর্ট ইমেইল"><input className={inputCls} value={f.support_email} onChange={set("support_email")} /></Field>
             <Field label="টেলিগ্রাম লিংক"><input className={inputCls} value={f.telegram_link} onChange={set("telegram_link")} /></Field>
+            <Field label="WhatsApp নম্বর (মেয়াদ শেষ পেজে দেখাবে)"><input className={`${inputCls} font-en`} value={f.support_whatsapp} onChange={set("support_whatsapp")} placeholder="8801XXXXXXXXX" /></Field>
           </div>
           <AuraKey />
           <Toggle label="AuraPay পেমেন্ট চালু" checked={!!f.aurapay_enabled} onChange={(v) => setF({ ...f, aurapay_enabled: v })} />
+        </div>
+      </Panel>
+      <Panel title="সার্ভার (অটো ডিপ্লয়)">
+        <DeployServer f={f} set={set} />
+      </Panel>
+      <Panel title="প্ল্যানের মেয়াদ শেষ হলে">
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">মেয়াদ শেষের পর প্রথম কয়েক দিন সাইটের জায়গায় শুধু "প্ল্যান আপগ্রেড করুন" পেজ দেখাবে, তারপর সাইট বন্ধ থাকবে, শেষে সাইটের ফাইল ও ডেটা স্থায়ীভাবে মুছে যাবে।</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="নোটিশ পেজ কত দিন (grace days)"><input type="number" min={1} className={inputCls} value={f.grace_days} onChange={set("grace_days")} /></Field>
+            <Field label="কত দিন পর স্থায়ীভাবে মুছবে"><input type="number" min={1} className={inputCls} value={f.delete_after_days} onChange={set("delete_after_days")} /></Field>
+          </div>
         </div>
       </Panel>
       <Panel title="হোস্টিং ও ডোমেইন">
@@ -137,6 +150,46 @@ server {
       <p className="text-xs text-muted-foreground">এটি কপি করে VPS-এ বসান, তারপর SSL চালু করুন (যেমন certbot)। এই পেজটি প্রকাশিত সাইট থেকে খুললে ঠিকানাটি সঠিক আসবে।</p>
       <pre className="max-h-72 overflow-auto whitespace-pre rounded-xl border border-border bg-background/60 p-3 font-en text-xs">{conf}</pre>
       <button className={`${btn} border border-input`} onClick={() => { navigator.clipboard.writeText(conf); toast.success("কপি হয়েছে"); }}>কপি করুন</button>
+    </div>
+  );
+}
+
+function DeployServer({ f, set }: { f: any; set: (k: string) => (e: any) => void }) {
+  const get = useServerFn(adminGetDeployToken);
+  const gen = useServerFn(adminNewDeployToken);
+  const test = useServerFn(adminTestAgent);
+  const { data, refetch } = useQuery({ queryKey: ["deploy-token"], queryFn: () => get() });
+  const [fresh, setFresh] = useState("");
+  const [origin, setOrigin] = useState("");
+  useEffect(() => { setOrigin(window.location.origin); }, []);
+  const host = f.agent_host || "deploy.example.com";
+  const cmd = `curl -fsSL ${origin}/install-agent.sh | sudo HEXA_APP_URL=${origin} bash -s -- ${fresh || "<TOKEN>"} ${host} ${f.support_email || ""} ${f.agent_port || 8443}`.replace(/\s+/g, " ").trim();
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">প্রকাশ বা লাইভ আপডেট চাপলে সাইটটি আপনার VPS এ স্ট্যাটিক ফাইল হিসেবে চলে যাবে (nginx + gzip + ক্যাশ + SSL)। এজেন্টের ঠিকানার DNS আপনার VPS এর IP তে পয়েন্ট করা থাকতে হবে।</p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="VPS সার্ভার IP"><input className={`${inputCls} font-en`} value={f.server_ip} onChange={set("server_ip")} placeholder="123.45.67.89" /></Field>
+        <Field label="এজেন্টের ঠিকানা (ডোমেইন)"><input className={`${inputCls} font-en`} value={f.agent_host} onChange={set("agent_host")} placeholder="deploy.example.com" /></Field>
+        <Field label="এজেন্ট পোর্ট"><input type="number" className={`${inputCls} font-en`} value={f.agent_port} onChange={set("agent_port")} placeholder="8443" /></Field>
+        <Field label={`ডিপ্লয় টোকেন ${data?.masked ? `(বর্তমান: ${data.masked})` : "(এখনো নেই)"}`}>
+          <button className={`${btn} min-h-12 w-full border border-border`} onClick={async () => {
+            const r = await gen();
+            if ("error" in r) return toast.error(r.error);
+            setFresh(r.token); refetch(); toast.success("নতুন টোকেন তৈরি হয়েছে — নিচের কমান্ডটি কপি করুন");
+          }}>নতুন টোকেন তৈরি করুন</button>
+        </Field>
+      </div>
+      <Field label="VPS এ একবার এই কমান্ডটি চালান (Ubuntu)">
+        <div className="flex gap-2">
+          <code className="block flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-muted p-3 font-en text-xs">{cmd}</code>
+          <button className={`${btn} shrink-0 border border-border`} onClick={() => { navigator.clipboard.writeText(cmd); toast.success("কপি হয়েছে"); }}>কপি</button>
+        </div>
+      </Field>
+      {!fresh && <p className="text-xs text-muted-foreground">নিরাপত্তার জন্য টোকেন একবারই দেখানো হয়। কমান্ডে টোকেন দেখতে "নতুন টোকেন তৈরি করুন" চাপুন (পুরনো টোকেন বাতিল হবে)।</p>}
+      <button className={`${btn} min-h-12 border border-border`} onClick={async () => {
+        const r = await test();
+        if ("error" in r) toast.error(r.error); else toast.success("সার্ভারের সাথে সংযোগ ঠিক আছে ✓");
+      }}>সংযোগ পরীক্ষা করুন (আগে সেভ করুন)</button>
     </div>
   );
 }
