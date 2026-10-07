@@ -27,6 +27,8 @@ import { PREVIEW_MS } from "@/lib/hosting";
 import { BackendDialog, FilesDialog } from "@/components/app/BackendDialog";
 import { setupBackend, setProjectType } from "@/lib/backend.functions";
 import { Database, FolderTree } from "lucide-react";
+import { getJob, cancelJob, activeJob } from "@/lib/jobs.functions";
+import { PlanDialog } from "@/components/app/PlanDialog";
 
 const BE_RE = /লগইন|লগ ইন|সাইন ?আপ|ডেটাবেস|ডাটাবেস|সেভ|অর্ডার|বুকিং|রেজিস্ট্রেশন|ফর্ম জমা|login|sign ?up|database|save|register|booking/i;
 
@@ -49,6 +51,10 @@ function Builder() {
   const fetchProviders = useServerFn(listActiveProviders);
   const publish = useServerFn(setPublished);
   const doLive = useServerFn(liveUpdate);
+  const pollJob = useServerFn(getJob);
+  const stopJob = useServerFn(cancelJob);
+  const findActive = useServerFn(activeJob);
+  const [planView, setPlanView] = useState<string | null>(null);
   useEffect(() => {
     const ch = supabase.channel(`project-${projectId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, () => qc.invalidateQueries({ queryKey: ["project", projectId] }))
