@@ -423,6 +423,44 @@ export type Database = {
           },
         ]
       }
+      project_analysis: {
+        Row: {
+          analyzed_at: string
+          entry_file: string
+          file_count: number
+          file_map_json: Json
+          framework: string
+          id: string
+          project_id: string
+        }
+        Insert: {
+          analyzed_at?: string
+          entry_file?: string
+          file_count?: number
+          file_map_json?: Json
+          framework?: string
+          id?: string
+          project_id: string
+        }
+        Update: {
+          analyzed_at?: string
+          entry_file?: string
+          file_count?: number
+          file_map_json?: Json
+          framework?: string
+          id?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_analysis_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: true
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       project_versions: {
         Row: {
           changelog_bn: string
@@ -482,6 +520,7 @@ export type Database = {
           published_html: string | null
           published_version: number
           show_badge: boolean
+          skill_pack_id: string | null
           subdomain: string | null
           updated_at: string
           user_id: string
@@ -509,6 +548,7 @@ export type Database = {
           published_html?: string | null
           published_version?: number
           show_badge?: boolean
+          skill_pack_id?: string | null
           subdomain?: string | null
           updated_at?: string
           user_id: string
@@ -536,11 +576,20 @@ export type Database = {
           published_html?: string | null
           published_version?: number
           show_badge?: boolean
+          skill_pack_id?: string | null
           subdomain?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_skill_pack_id_fkey"
+            columns: ["skill_pack_id"]
+            isOneToOne: false
+            referencedRelation: "skill_packs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       site_settings: {
         Row: {
@@ -641,6 +690,39 @@ export type Database = {
           tagline?: string
           telegram_link?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      skill_packs: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          is_active: boolean
+          name_bn: string
+          slug: string
+          sort_order: number
+          system_prompt: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name_bn: string
+          slug: string
+          sort_order?: number
+          system_prompt?: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name_bn?: string
+          slug?: string
+          sort_order?: number
+          system_prompt?: string
         }
         Relationships: []
       }
