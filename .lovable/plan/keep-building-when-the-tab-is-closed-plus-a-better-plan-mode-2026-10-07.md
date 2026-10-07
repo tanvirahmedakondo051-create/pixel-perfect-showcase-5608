@@ -3,6 +3,7 @@
 ## 1. Builds keep running in the background
 
 ### What users will see
+
 - After pressing send, the user can switch tabs, lock the phone or close the app, and the build keeps going.
 - When they come back, the chat shows where the build is ("হিরো বানাচ্ছি... (২/৪)"), or the finished site.
 - The live progress card stays the same. It refreshes every 3 seconds instead of needing a live connection.
@@ -11,6 +12,7 @@
 - Running out of coins still pauses the build, and the "▶️ চালিয়ে যান" button still works as it does now.
 
 ### How it works
+
 - Pressing send creates a build job and returns straight away.
 - The server runs the job one part at a time. Each part is its own short server call, and when a part finishes it starts the next one. That way no single call runs too long, and nothing depends on the user's browser staying open.
 - Each finished part is saved right away (the existing checkpoint), including its progress, coins and partial page.
@@ -18,13 +20,16 @@
 - Edits, the question step and React builds use the same job system, so they also keep running when the tab is closed.
 
 ## 2. Plan mode, Lovable style
+
 Plan/Build mode already exists. This change adds:
-- **Free plans:** a plan costs no coins. It uses one small, capped planning call (no page code), and is limited to 20 plans per user per day so it can't be abused.
+
+- **Paid : it costs like build mode.** 
 - **Plan popup:** when a plan is ready, a popup (a bottom sheet on mobile) shows its sections, features and design (colours and fonts). The user can choose **অনুমোদন করুন ও বানান**, **পরিবর্তন চাই** (closes the popup so they can type changes in Plan mode) or **বন্ধ করুন**.
 - **Approve:** switches to Build mode and starts the build with the approved plan attached, so the site follows it. The coin estimate shows before the build starts.
 - Plan messages in chat keep their "📄 প্ল্যান" card, which can reopen the popup.
 
 ## Technical details
+
 - New table `generation_jobs` (id, project_id, user_id, status queued|running|paused|done|error|cancelled, kind build|edit|ask|react, input jsonb, step, total, step_label, tokens, coins, checkpoint_id, error, attempts, heartbeat_at, created/updated). GRANT select to authenticated, all to service_role; RLS: owner select only. Writes happen only from the server. Realtime isn't needed.
 - `generate.ts` is refactored so its step logic lives in `src/lib/jobs.server.ts` (`runJobStep(jobId)`). It stays a pure move of the existing logic: same prompts, checkpoints, add_coins charging and COINS_OUT pause.
 - `POST /api/public/generate`: auth, validation, coin check and estimate stay the same. It inserts a job, starts `/api/public/jobs/step` with an HMAC header (`job_token` app secret), and returns `{ jobId }`.
