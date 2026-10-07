@@ -5,7 +5,10 @@ import { lazy, Suspense, useEffect, useRef, useState } from "react";
 const AssetPanel = lazy(() => import("@/components/app/AssetPanel"));
 const AnalyzerPanel = lazy(() => import("@/components/app/AnalyzerPanel"));
 import { toast } from "sonner";
-import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2 } from "lucide-react";
+import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, ClipboardList, Hammer, CheckCircle2 } from "lucide-react";
+import { GithubDialog } from "@/components/app/GithubDialog";
+import { VersionsDialog } from "@/components/app/VersionsDialog";
+import { liveUpdate } from "@/lib/publish.functions";
 import { DomainDialog } from "@/components/app/DomainDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { bn, tokensToday, useProfile, useSession } from "@/lib/auth";
@@ -19,7 +22,8 @@ export const Route = createFileRoute("/_authenticated/builder/$projectId")({
   component: Builder,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; at?: string };
+type Msg = { role: "user" | "assistant"; content: string; at?: string; mode?: "plan" | "build" };
+const OPT_RE = /\[\[(.+?)\]\]/g;
 const chips = ["রেস্টুরেন্ট সাইট", "পোর্টফোলিও", "অনলাইন শপ", "বিয়ের দাওয়াত পেজ"];
 
 function Builder() {
@@ -29,6 +33,7 @@ function Builder() {
   const { data: profile } = useProfile(user?.id);
   const fetchProviders = useServerFn(listActiveProviders);
   const publish = useServerFn(setPublished);
+  const doLive = useServerFn(liveUpdate);
   const { data: providers } = useQuery({ queryKey: ["providers-public"], queryFn: () => fetchProviders() });
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -52,6 +57,10 @@ function Builder() {
   const [published, setPub] = useState<{ on: boolean; sub: string | null }>({ on: false, sub: null });
   const [domainOpen, setDomainOpen] = useState(false);
   const [tab, setTab] = useState<"chat" | "analyze" | "assets">("chat");
+  const [mode, setMode] = useState<"plan" | "build">("build");
+  const [ghOpen, setGhOpen] = useState(false);
+  const [verOpen, setVerOpen] = useState(false);
+  const [liveBusy, setLiveBusy] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -94,20 +103,21 @@ function Builder() {
     t.style.height = Math.min(t.scrollHeight, 180) + "px";
   };
 
-  const send = async (text?: string) => {
+  const send = async (text?: string, modeOverride?: "plan" | "build") => {
+    const m0 = modeOverride ?? mode;
     const prompt = (text ?? input).trim();
     if (!prompt || streaming) return;
     if (used >= limit) return toast.error("আজকের টোকেন শেষ! আগামীকাল আবার চেষ্টা করুন অথবা Pro নিন।");
     setInput("");
     setTimeout(autosize);
-    setMessages((m) => [...m, { role: "user", content: prompt }]);
+    setMessages((m) => [...m, { role: "user", content: prompt, mode: m0 }]);
     setStreaming(true);
     setLive("");
     try {
       const res = await fetch("/api/public/generate", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ projectId, prompt, providerId: providerId || null }),
+        body: JSON.stringify({ projectId, prompt, providerId: providerId || null, mode: m0 }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
@@ -139,8 +149,12 @@ function Builder() {
               setMobilePreview(true);
             }
             setUsedOverride(ev.used);
-            setMessages((m) => [...m, { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি" }]);
-            toast.success("সেভ হয়েছে ✓");
+            if (m0 === "plan") {
+              setMessages((m) => [...m, { role: "assistant", content: ev.plan || "", mode: "plan" }]);
+            } else {
+              setMessages((m) => [...m, { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" }]);
+              toast.success("সেভ হয়েছে ✓");
+            }
             qc.invalidateQueries({ queryKey: ["project", projectId] });
             qc.invalidateQueries({ queryKey: ["projects"] });
           }
@@ -165,6 +179,22 @@ function Builder() {
     URL.revokeObjectURL(a.href);
   };
 
+  const approvePlan = (planText: string) => {
+    setMode("build");
+    send(`এই অনুমোদিত প্ল্যান অনুযায়ী সম্পূর্ণ ওয়েবসাইট বানাও:\n\n${planText.replace(OPT_RE, "").trim()}`, "build");
+  };
+
+  const runLive = async () => {
+    setLiveBusy(true);
+    try {
+      const r = await doLive({ data: { id: projectId } });
+      if ("error" in r) return toast.error(r.error);
+      toast.success("✅ লাইভ আপডেট হয়েছে!", { description: r.changelog });
+      qc.invalidateQueries({ queryKey: ["project", projectId] });
+      qc.invalidateQueries({ queryKey: ["versions", projectId] });
+    } catch { toast.error("লাইভ আপডেট করা যায়নি"); } finally { setLiveBusy(false); }
+  };
+
   const doPublish = async () => {
     const r = await publish({ data: { id: projectId, publish: !published.on } });
     if ("error" in r) return toast.error(r.error);
@@ -176,6 +206,7 @@ function Builder() {
     } else toast.success("প্রকাশ বন্ধ করা হয়েছে");
   };
 
+  const changes = (project as any)?.changes_since_publish ?? 0;
   if (isLoading) return <div className="grid min-h-screen place-items-center"><Loader2 className="size-8 animate-spin text-cyan" /></div>;
 
   const toolbar = (
@@ -185,14 +216,22 @@ function Builder() {
         <button onClick={() => { setDevice("mobile"); setShowCode(false); }} className={`grid size-10 place-items-center rounded-md ${device === "mobile" && !showCode ? "bg-primary" : ""}`} aria-label="মোবাইল"><Smartphone className="size-4" /></button>
         {canCode && <button onClick={() => setShowCode(!showCode)} className={`grid size-10 place-items-center rounded-md ${showCode ? "bg-primary" : ""}`} aria-label="কোড"><Code2 className="size-4" /></button>}
       </div>
-      <div className="ml-auto flex gap-1">
+      <div className="ml-auto flex flex-wrap justify-end gap-1">
+        <button onClick={() => setGhOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="GitHub"><Github className="size-4" /><span className="hidden sm:inline">GitHub</span></button>
+        {published.on && <button onClick={() => setVerOpen(true)} className="grid size-11 place-items-center rounded-lg hover:bg-accent" aria-label="ভার্সন ইতিহাস"><History className="size-4" /></button>}
+        {published.on && changes > 0 && (
+          <button onClick={runLive} disabled={liveBusy || streaming} className="relative flex min-h-11 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-semibold disabled:opacity-60">
+            {liveBusy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}লাইভ আপডেট
+            <span className="rounded-full bg-background/30 px-1.5 text-[11px]">{bn(changes)} টি চেঞ্জ</span>
+          </button>
+        )}
         {canDownload && <button onClick={download} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent"><Download className="size-4" /><span className="hidden sm:inline">ডাউনলোড</span></button>}
         {canDomain && (
           <button onClick={() => setDomainOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="কাস্টম ডোমেইন">
             <Link2 className="size-4" /><span className="hidden sm:inline">ডোমেইন</span>
           </button>
         )}
-        <button onClick={doPublish} className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${published.on ? "border border-success/50 text-success" : "bg-brand"}`}>
+        <button onClick={published.on ? () => setVerOpen(true) : doPublish} className={`flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold ${published.on ? "border border-success/50 text-success" : "bg-brand"}`}>
           <Globe className="size-4" />{published.on ? "প্রকাশিত" : "প্রকাশ করুন"}
         </button>
         <button onClick={() => setMobilePreview(false)} className="grid size-11 place-items-center rounded-lg hover:bg-accent md:hidden" aria-label="বন্ধ করুন"><X /></button>
@@ -205,6 +244,12 @@ function Builder() {
       {toolbar}
       {published.on && published.sub && (
         <a href={`/s/${published.sub}`} target="_blank" rel="noreferrer" className="truncate border-b border-border px-3 py-1.5 font-en text-xs text-cyan">/s/{published.sub}</a>
+      )}
+      {project && (
+        <>
+          <GithubDialog open={ghOpen} onOpenChange={setGhOpen} projectId={projectId} projectName={project.name} onImported={(h) => { setHtml(h); qc.invalidateQueries({ queryKey: ["project", projectId] }); }} />
+          <VersionsDialog open={verOpen} onOpenChange={setVerOpen} projectId={projectId} current={(project as any).published_version ?? 0} published={published.on} onRolledBack={(h) => setHtml(h)} onUnpublish={doPublish} />
+        </>
       )}
       {project && canDomain && (
         <DomainDialog open={domainOpen} onOpenChange={setDomainOpen} project={project as any} onChanged={() => qc.invalidateQueries({ queryKey: ["project", projectId] })} />
@@ -283,6 +328,13 @@ function Builder() {
               </Suspense>
             </div>
           )}
+          <div className={`border-b border-border px-2 py-2 ${tab !== "chat" ? "hidden" : ""}`}>
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="মোড">
+              <button onClick={() => setMode("plan")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "plan" ? "bg-cyan/20 text-cyan" : ""}`}><ClipboardList className="size-4" /> প্ল্যান</button>
+              <button onClick={() => setMode("build")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "build" ? "bg-primary text-primary-foreground" : ""}`}><Hammer className="size-4" /> বিল্ড</button>
+            </div>
+            {mode === "plan" && <p className="mt-1.5 text-center text-[11px] text-muted-foreground">প্ল্যান মোডে AI আলোচনা করবে, ওয়েবসাইট বদলাবে না</p>}
+          </div>
           <div className={`flex-1 space-y-3 overflow-y-auto p-4 ${tab !== "chat" ? "hidden" : ""}`}>
             {!messages.length && (
               <div className="pt-6 text-center">
@@ -297,7 +349,21 @@ function Builder() {
             )}
             {messages.map((m, i) => (
               <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted"}`}>
-                {m.content}
+                {m.mode === "plan" && m.role === "assistant" ? (
+                  <>
+                    <div className="whitespace-pre-line">{m.content.replace(OPT_RE, "").replace(/\n{3,}/g, "\n\n").trim()}</div>
+                    {i === messages.length - 1 && !streaming && [...m.content.matchAll(OPT_RE)].length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[...m.content.matchAll(OPT_RE)].map((x, k) => (
+                          <button key={k} onClick={() => send(x[1], "plan")} className="min-h-10 rounded-full border border-cyan/50 px-3 text-xs text-cyan hover:bg-cyan/10">{x[1]}</button>
+                        ))}
+                      </div>
+                    )}
+                    {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
+                      <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
+                    )}
+                  </>
+                ) : <span className="whitespace-pre-line">{m.content}</span>}
                 {m.role === "assistant" && m.content.startsWith("✓") && i === messages.length - 1 && html && (
                   <button onClick={() => setMobilePreview(true)} className="mt-2 flex min-h-10 items-center gap-1 text-cyan md:hidden"><Eye className="size-4" /> প্রিভিউ দেখুন</button>
                 )}
@@ -321,7 +387,7 @@ function Builder() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
                 }}
-                placeholder="যেমন: আমার কাপড়ের দোকানের ওয়েবসাইট বানাও..."
+                placeholder={mode === "plan" ? "কী ধরনের সাইট চান, আলোচনা শুরু করুন..." : "যেমন: আমার কাপড়ের দোকানের ওয়েবসাইট বানাও..."}
                 className="max-h-44 min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-base outline-none placeholder:text-muted-foreground"
               />
               <button onClick={() => send()} disabled={streaming || !input.trim()} className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand disabled:opacity-40" aria-label="পাঠান">
