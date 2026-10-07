@@ -384,6 +384,7 @@ export type Database = {
           plan_ended_at: string | null
           plan_expires_at: string | null
           plan_id: string | null
+          sites_deleted_at: string | null
           tokens_used_today: number
         }
         Insert: {
@@ -396,6 +397,7 @@ export type Database = {
           plan_ended_at?: string | null
           plan_expires_at?: string | null
           plan_id?: string | null
+          sites_deleted_at?: string | null
           tokens_used_today?: number
         }
         Update: {
@@ -408,6 +410,7 @@ export type Database = {
           plan_ended_at?: string | null
           plan_expires_at?: string | null
           plan_id?: string | null
+          sites_deleted_at?: string | null
           tokens_used_today?: number
         }
         Relationships: [
@@ -461,6 +464,10 @@ export type Database = {
           code_html: string
           created_at: string
           custom_domain: string | null
+          deploy_message: string
+          deploy_status: string
+          deployed_at: string | null
+          deployed_url: string | null
           domain_checked_at: string | null
           domain_found_ns: string[]
           domain_status: string
@@ -484,6 +491,10 @@ export type Database = {
           code_html?: string
           created_at?: string
           custom_domain?: string | null
+          deploy_message?: string
+          deploy_status?: string
+          deployed_at?: string | null
+          deployed_url?: string | null
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string
@@ -507,6 +518,10 @@ export type Database = {
           code_html?: string
           created_at?: string
           custom_domain?: string | null
+          deploy_message?: string
+          deploy_status?: string
+          deployed_at?: string | null
+          deployed_url?: string | null
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string
@@ -529,12 +544,16 @@ export type Database = {
       }
       site_settings: {
         Row: {
+          agent_host: string
+          agent_port: number
           announcement_active: boolean
           announcement_color: string
           announcement_text: string
           aurapay_enabled: boolean
           build_prompt: string
+          delete_after_days: number
           free_block_publish: boolean
+          grace_days: number
           hosting_domain: string
           id: number
           logo_url: string | null
@@ -551,18 +570,23 @@ export type Database = {
           server_ip: string
           site_name: string
           support_email: string
+          support_whatsapp: string
           system_prompt: string
           tagline: string
           telegram_link: string
           updated_at: string
         }
         Insert: {
+          agent_host?: string
+          agent_port?: number
           announcement_active?: boolean
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
           build_prompt?: string
+          delete_after_days?: number
           free_block_publish?: boolean
+          grace_days?: number
           hosting_domain?: string
           id?: number
           logo_url?: string | null
@@ -579,18 +603,23 @@ export type Database = {
           server_ip?: string
           site_name?: string
           support_email?: string
+          support_whatsapp?: string
           system_prompt?: string
           tagline?: string
           telegram_link?: string
           updated_at?: string
         }
         Update: {
+          agent_host?: string
+          agent_port?: number
           announcement_active?: boolean
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
           build_prompt?: string
+          delete_after_days?: number
           free_block_publish?: boolean
+          grace_days?: number
           hosting_domain?: string
           id?: number
           logo_url?: string | null
@@ -607,6 +636,7 @@ export type Database = {
           server_ip?: string
           site_name?: string
           support_email?: string
+          support_whatsapp?: string
           system_prompt?: string
           tagline?: string
           telegram_link?: string
