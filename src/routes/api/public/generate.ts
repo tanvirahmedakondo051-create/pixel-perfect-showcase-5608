@@ -226,6 +226,11 @@ export const Route = createFileRoute("/api/public/generate")({
         ]);
         let skillCtx = pack?.system_prompt ? `\n\n${pack.system_prompt}` : "";
         if (dq?.system_prompt && (pack as any)?.slug !== "design-quality") skillCtx += `\n\n${dq.system_prompt}`;
+        let freeAssets = "";
+        if (!project.code_html && (project as any).project_type !== "react") {
+          const { selectAssets } = await import("@/lib/assets.server");
+          freeAssets = await selectAssets(db, prompt, (pack as any)?.slug).catch(() => "");
+        }
         if (analysis) {
           const files = ((analysis.file_map_json as any[]) ?? []).slice(0, 60).map((f) => `- ${f.path} (${f.role})`).join("\n");
           skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;
@@ -234,7 +239,7 @@ export const Route = createFileRoute("/api/public/generate")({
         const { backendContext, injectBackend } = await import("@/lib/backend.server");
         const { appOrigin } = await import("@/lib/origin.server");
         const beCtx = (project as any).backend_enabled ? await backendContext(db, project.id, isReact) : "";
-        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
+        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + freeAssets + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").slice(-2).map((m) => ({ role: "user", content: m.content.slice(0, 600) }));
@@ -573,6 +578,9 @@ export const Route = createFileRoute("/api/public/generate")({
             if (!html || !/<\w+/.test(html)) {
               html = "";
               send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। অন্যভাবে লিখে আবার চেষ্টা করুন।" });
+            } else if (!isReact) {
+              const { postProcessAssets } = await import("@/lib/assets.server");
+              html = postProcessAssets(html);
             }
 
             const { data: kws } = await db.from("flag_keywords").select("keyword");

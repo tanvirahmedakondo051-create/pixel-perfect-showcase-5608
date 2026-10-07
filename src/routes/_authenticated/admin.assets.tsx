@@ -6,6 +6,7 @@ import { Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageTitle, Panel, Confirm, btn } from "@/components/admin/ui";
 import { Field, inputCls } from "@/components/admin/fields";
+import FreeAssets from "@/components/admin/FreeAssets";
 
 export const Route = createFileRoute("/_authenticated/admin/assets")({
   head: () => ({ meta: [{ title: "অ্যাসেট — অ্যাডমিন" }] }),
@@ -24,7 +25,23 @@ function readFile(f: File, asDataUrl: boolean) {
   });
 }
 
+const TABS = [["library", "নিজের লাইব্রেরি"], ["photos", "ছবি"], ["lotties", "Lottie অ্যানিমেশন"], ["icons", "Iconify ফেভারিট"]] as const;
+
 function AdminAssets() {
+  const [tab, setTab] = useState<(typeof TABS)[number][0]>("library");
+  return (
+    <div className="space-y-4">
+      <PageTitle title="অ্যাসেট লাইব্রেরি" />
+      <div className="flex flex-wrap gap-1.5">
+        {TABS.map(([k, v]) => <button key={k} onClick={() => setTab(k)} className={`min-h-11 rounded-lg px-3 text-sm ${tab === k ? "bg-primary text-primary-foreground" : "glass"}`}>{v}</button>)}
+      </div>
+      {tab === "library" ? <OwnLibrary /> : <FreeAssets kind={tab} />}
+      {tab !== "library" && <p className="text-xs text-muted-foreground">এগুলো ফ্রি লাইসেন্সের অ্যাসেট — AI নতুন সাইট বানানোর সময় বিষয় অনুযায়ী বেছে নেয়।</p>}
+    </div>
+  );
+}
+
+function OwnLibrary() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ["assets"], queryFn: async () => (await supabase.from("assets").select("*").order("created_at", { ascending: false })).data ?? [] });
   const [f, setF] = useState({ name: "", category: "illustration", type: "svg", url_or_code: "", tags: "" });
@@ -58,7 +75,6 @@ function AdminAssets() {
 
   return (
     <div className="space-y-4">
-      <PageTitle title="অ্যাসেট লাইব্রেরি" />
       <Panel title="নতুন অ্যাসেট">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="নাম"><input className={inputCls} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>

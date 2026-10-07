@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { adminGetAuraKey, adminSetAuraKey, adminGetDeployToken, adminNewDeployToken, adminTestAgent, adminGetBackendKey, adminSetBackendKey } from "@/lib/admin.functions";
+import { adminGetAuraKey, adminSetAuraKey, adminGetDeployToken, adminNewDeployToken, adminTestAgent, adminGetBackendKey, adminSetBackendKey, adminGetPexelsKey, adminSetPexelsKey, adminTestPexels } from "@/lib/admin.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useSiteSettings } from "@/lib/site";
@@ -59,6 +59,7 @@ function Settings() {
             <Field label="WhatsApp নম্বর (মেয়াদ শেষ পেজে দেখাবে)"><input className={`${inputCls} font-en`} value={f.support_whatsapp} onChange={set("support_whatsapp")} placeholder="8801XXXXXXXXX" /></Field>
           </div>
           <AuraKey />
+          <PexelsKey />
           <Toggle label="AuraPay পেমেন্ট চালু" checked={!!f.aurapay_enabled} onChange={(v) => setF({ ...f, aurapay_enabled: v })} />
         </div>
       </Panel>
@@ -138,6 +139,31 @@ function AuraKey() {
           if ("error" in r) return toast.error(r.error);
           setV(""); refetch(); toast.success("API Key সেভ হয়েছে");
         }}>সেভ</button>
+      </div>
+    </Field>
+  );
+}
+
+function PexelsKey() {
+  const get = useServerFn(adminGetPexelsKey);
+  const setKey = useServerFn(adminSetPexelsKey);
+  const test = useServerFn(adminTestPexels);
+  const { data, refetch } = useQuery({ queryKey: ["pexels-key"], queryFn: () => get() });
+  const [v, setV] = useState("");
+  return (
+    <Field label={`Pexels API Key (ঐচ্ছিক, ফ্রি) ${!data ? "" : data.masked ? `(বর্তমান: ${data.masked})` : "(না দিলে বাছাই করা ছবি ব্যবহার হবে)"}`}>
+      <div className="flex flex-wrap gap-2">
+        <input className={`${inputCls} font-en min-w-0 flex-1`} type="password" value={v} onChange={(e) => setV(e.target.value)} placeholder="Pexels API Key" />
+        <button className={`${btn} bg-brand shrink-0`} onClick={async () => {
+          if (v.trim().length < 8) return toast.error("সঠিক API Key দিন");
+          const r = await setKey({ data: { key: v } });
+          if ("error" in r) return toast.error(r.error);
+          setV(""); refetch(); toast.success("Pexels key সেভ হয়েছে");
+        }}>সেভ</button>
+        <button className={`${btn} glass shrink-0`} onClick={async () => {
+          const r = await test();
+          "error" in r ? toast.error(r.error) : toast.success("Pexels সংযোগ ঠিক আছে ✅");
+        }}>কানেকশন টেস্ট</button>
       </div>
     </Field>
   );
