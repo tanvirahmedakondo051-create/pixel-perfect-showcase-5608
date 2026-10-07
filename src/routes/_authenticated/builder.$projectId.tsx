@@ -3,9 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 const AssetPanel = lazy(() => import("@/components/app/AssetPanel"));
-const AnalyzerPanel = lazy(() => import("@/components/app/AnalyzerPanel"));
 import { toast } from "sonner";
-import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, ClipboardList, Hammer, CheckCircle2 } from "lucide-react";
+import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, ClipboardList, Hammer, CheckCircle2, Paperclip, Palette, FileText, Server } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { uploadChatFile } from "@/lib/upload.functions";
 import { GithubDialog } from "@/components/app/GithubDialog";
 import { VersionsDialog } from "@/components/app/VersionsDialog";
 import { liveUpdate } from "@/lib/publish.functions";
@@ -22,7 +23,9 @@ export const Route = createFileRoute("/_authenticated/builder/$projectId")({
   component: Builder,
 });
 
-type Msg = { role: "user" | "assistant"; content: string; at?: string; mode?: "plan" | "build" };
+type Att = { path: string; url: string; name: string; type: string };
+type Msg = { role: "user" | "assistant"; content: string; at?: string; mode?: "plan" | "build"; files?: { name: string; url: string; type: string }[] };
+const LINK_RE = /https?:\/\/[^\s<>"']+|www\.[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i;
 const OPT_RE = /\[\[(.+?)\]\]/g;
 const chips = ["রেস্টুরেন্ট সাইট", "পোর্টফোলিও", "অনলাইন শপ", "বিয়ের দাওয়াত পেজ"];
 
@@ -34,6 +37,12 @@ function Builder() {
   const fetchProviders = useServerFn(listActiveProviders);
   const publish = useServerFn(setPublished);
   const doLive = useServerFn(liveUpdate);
+  useEffect(() => {
+    const ch = supabase.channel(`project-${projectId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, () => qc.invalidateQueries({ queryKey: ["project", projectId] }))
+      .subscribe();
+    return () => { supabase.removeChannel(ch); };
+  }, [projectId, qc]);
   const { data: providers } = useQuery({ queryKey: ["providers-public"], queryFn: () => fetchProviders() });
   const { data: project, isLoading } = useQuery({
     queryKey: ["project", projectId],
@@ -56,7 +65,11 @@ function Builder() {
   const [usedOverride, setUsedOverride] = useState<number | null>(null);
   const [published, setPub] = useState<{ on: boolean; sub: string | null }>({ on: false, sub: null });
   const [domainOpen, setDomainOpen] = useState(false);
-  const [tab, setTab] = useState<"chat" | "analyze" | "assets">("chat");
+  const [atts, setAtts] = useState<Att[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [assetOpen, setAssetOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const upload = useServerFn(uploadChatFile);
   const [mode, setMode] = useState<"plan" | "build">("build");
   const [lastSaved, setLastSaved] = useState(0);
   const [ghOpen, setGhOpen] = useState(false);
@@ -107,18 +120,21 @@ function Builder() {
   const send = async (text?: string, modeOverride?: "plan" | "build") => {
     const m0 = modeOverride ?? mode;
     const prompt = (text ?? input).trim();
-    if (!prompt || streaming) return;
+    if ((!prompt && !atts.length) || streaming || uploading) return;
+    const files = atts;
     if (used >= limit) return toast.error("আজকের টোকেন শেষ! আগামীকাল আবার চেষ্টা করুন অথবা Pro নিন।");
     setInput("");
     setTimeout(autosize);
-    setMessages((m) => [...m, { role: "user", content: prompt, mode: m0 }]);
+    setAtts([]);
+    const text0 = prompt || "এই ফাইলগুলো ওয়েবসাইটে ব্যবহার করো";
+    setMessages((m) => [...m, { role: "user", content: text0, mode: m0, files: files.map((f) => ({ name: f.name, url: f.url, type: f.type })) }]);
     setStreaming(true);
     setLive("");
     try {
       const res = await fetch("/api/public/generate", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ projectId, prompt, providerId: providerId || null, mode: m0 }),
+        body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
@@ -168,6 +184,25 @@ function Builder() {
       setStreaming(false);
       setLive("");
       taRef.current?.focus();
+    }
+  };
+
+  const onFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    const picked = [...list].slice(0, 4 - atts.length);
+    if (!picked.length) return toast.error("একবারে সর্বোচ্চ ৪টি ফাইল");
+    setUploading(true);
+    try {
+      for (const f of picked) {
+        if (f.size > 5 * 1024 * 1024) { toast.error(`${f.name}: ৫MB এর বেশি`); continue; }
+        const data = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] ?? ""); r.onerror = rej; r.readAsDataURL(f); });
+        const r = await upload({ data: { projectId, name: f.name, type: f.type || "application/octet-stream", data } });
+        if ("error" in r) { toast.error(r.error); continue; }
+        setAtts((a) => [...a, { path: r.path, url: r.url, name: r.name, type: r.type }]);
+      }
+    } catch { toast.error("আপলোড করা যায়নি"); } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -315,30 +350,14 @@ function Builder() {
             <Progress value={pct} className={`mt-1.5 h-1.5 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
           </div>
 
-          <div className="grid grid-cols-3 gap-1 border-b border-border p-2">
-            {([["chat", "চ্যাট"], ["analyze", "সাইট দেখে বানান"], ["assets", "অ্যাসেট"]] as const).map(([k, l]) => (
-              <button key={k} onClick={() => setTab(k)} className={`min-h-11 rounded-lg px-1 text-xs sm:text-sm ${tab === k ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>{l}</button>
-            ))}
-          </div>
-          {tab !== "chat" && (
-            <div className="min-h-0 flex-1">
-              <Suspense fallback={<div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-cyan" /></div>}>
-                {tab === "analyze" ? (
-                  <AnalyzerPanel disabled={streaming} onBuild={(p) => { setTab("chat"); send(p); }} />
-                ) : (
-                  <AssetPanel onPick={(t) => { setInput((v) => (v ? v + "\n" : "") + t); setTab("chat"); toast.success("অ্যাসেট বার্তায় যোগ হয়েছে"); setTimeout(autosize); }} />
-                )}
-              </Suspense>
-            </div>
-          )}
-          <div className={`border-b border-border px-2 py-2 ${tab !== "chat" ? "hidden" : ""}`}>
+          <div className={`border-b border-border px-2 py-2`}>
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="মোড">
               <button onClick={() => setMode("plan")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "plan" ? "bg-cyan/20 text-cyan" : ""}`}><ClipboardList className="size-4" /> প্ল্যান</button>
               <button onClick={() => setMode("build")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "build" ? "bg-primary text-primary-foreground" : ""}`}><Hammer className="size-4" /> বিল্ড</button>
             </div>
             {mode === "plan" && <p className="mt-1.5 text-center text-[11px] text-muted-foreground">প্ল্যান মোডে AI আলোচনা করবে, ওয়েবসাইট বদলাবে না</p>}
           </div>
-          <div className={`flex-1 space-y-3 overflow-y-auto p-4 ${tab !== "chat" ? "hidden" : ""}`}>
+          <div className={`flex-1 space-y-3 overflow-y-auto p-4`}>
             {!messages.length && (
               <div className="pt-6 text-center">
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
@@ -367,6 +386,13 @@ function Builder() {
                     )}
                   </>
                 ) : <span className="whitespace-pre-line">{m.content}</span>}
+                {!!m.files?.length && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {m.files.map((f, k) => f.type.startsWith("image/")
+                      ? <img key={k} src={f.url} alt={f.name} loading="lazy" className="size-16 rounded-lg object-cover" />
+                      : <span key={k} className="flex items-center gap-1 rounded-lg bg-background/30 px-2 py-1 text-xs"><FileText className="size-3" />{f.name}</span>)}
+                  </div>
+                )}
                 {m.role === "assistant" && m.content.startsWith("✓") && i === messages.length - 1 && html && (
                   <button onClick={() => setMobilePreview(true)} className="mt-2 flex min-h-10 items-center gap-1 text-cyan md:hidden"><Eye className="size-4" /> প্রিভিউ দেখুন</button>
                 )}
@@ -380,20 +406,49 @@ function Builder() {
             <div ref={endRef} />
           </div>
 
-          <div className={`border-t border-border bg-background/80 p-3 ${tab !== "chat" ? "hidden" : ""} pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
-            <div className="flex items-end gap-2 rounded-2xl border border-input bg-card p-2 focus-within:border-cyan">
+          <div className={`border-t border-border bg-background/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
+            {(!!atts.length || uploading) && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {atts.map((a, i) => (
+                  <div key={a.path} className="relative">
+                    {a.type.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-14 rounded-lg object-cover" /> : <span className="flex h-14 items-center gap-1 rounded-lg bg-muted px-2 text-xs"><FileText className="size-4" />{a.name.slice(0, 14)}</span>}
+                    <button onClick={() => setAtts((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-destructive text-destructive-foreground" aria-label="সরান"><X className="size-3" /></button>
+                  </div>
+                ))}
+                {uploading && <div className="grid size-14 place-items-center rounded-lg bg-muted"><Loader2 className="size-4 animate-spin text-cyan" /></div>}
+              </div>
+            )}
+            {LINK_RE.test(input) && (
+              <p className="mb-2 flex items-center gap-1.5 text-xs text-cyan"><Link2 className="size-3" /> লিংকটি AI নিজে খুলে ডিজাইন বিশ্লেষণ করবে</p>
+            )}
+            <input ref={fileRef} type="file" multiple accept="image/*,application/pdf,text/plain" className="hidden" onChange={(e) => onFiles(e.target.files)} />
+            <div className="flex items-end gap-1 rounded-2xl border border-input bg-card p-2 focus-within:border-cyan">
+              <button onClick={() => fileRef.current?.click()} disabled={uploading || atts.length >= 4} className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40" aria-label="ফাইল যোগ করুন"><Paperclip className="size-5" /></button>
+              <Popover open={assetOpen} onOpenChange={setAssetOpen}>
+                <PopoverTrigger asChild>
+                  <button className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="অ্যাসেট"><Palette className="size-5" /></button>
+                </PopoverTrigger>
+                <PopoverContent side="top" align="start" className="h-[min(70dvh,520px)] w-[min(92vw,420px)] overflow-hidden p-0">
+                  {assetOpen && (
+                    <Suspense fallback={<div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-cyan" /></div>}>
+                      <AssetPanel onPick={(t) => { setInput((v) => (v ? v + "\n" : "") + t); setAssetOpen(false); toast.success("অ্যাসেট বার্তায় যোগ হয়েছে"); setTimeout(autosize); }} />
+                    </Suspense>
+                  )}
+                </PopoverContent>
+              </Popover>
               <textarea
                 ref={taRef}
                 rows={1}
                 value={input}
                 onChange={(e) => { setInput(e.target.value); autosize(); }}
+                onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); onFiles(e.clipboardData.files); } }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
                 }}
                 placeholder={mode === "plan" ? "কী ধরনের সাইট চান, আলোচনা শুরু করুন..." : "যেমন: আমার কাপড়ের দোকানের ওয়েবসাইট বানাও..."}
                 className="max-h-44 min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-base outline-none placeholder:text-muted-foreground"
               />
-              <button onClick={() => send()} disabled={streaming || !input.trim()} className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand disabled:opacity-40" aria-label="পাঠান">
+              <button onClick={() => send()} disabled={streaming || uploading || (!input.trim() && !atts.length)} className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand disabled:opacity-40" aria-label="পাঠান">
                 {streaming ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
               </button>
             </div>
