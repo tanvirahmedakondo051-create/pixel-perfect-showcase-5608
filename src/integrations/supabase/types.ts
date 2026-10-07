@@ -280,6 +280,90 @@ export type Database = {
         }
         Relationships: []
       }
+      curated_lotties: {
+        Row: {
+          attribution_required: boolean
+          category: string
+          created_at: string
+          enabled: boolean
+          id: string
+          json_url: string
+          license: string
+          source: string
+          source_url: string
+          tags: string[]
+          title: string
+        }
+        Insert: {
+          attribution_required?: boolean
+          category: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          json_url: string
+          license?: string
+          source?: string
+          source_url?: string
+          tags?: string[]
+          title?: string
+        }
+        Update: {
+          attribution_required?: boolean
+          category?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          json_url?: string
+          license?: string
+          source?: string
+          source_url?: string
+          tags?: string[]
+          title?: string
+        }
+        Relationships: []
+      }
+      curated_photos: {
+        Row: {
+          alt: string
+          attribution_required: boolean
+          category: string
+          created_at: string
+          enabled: boolean
+          id: string
+          license: string
+          source: string
+          source_url: string
+          tags: string[]
+          url: string
+        }
+        Insert: {
+          alt?: string
+          attribution_required?: boolean
+          category: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          license?: string
+          source?: string
+          source_url?: string
+          tags?: string[]
+          url: string
+        }
+        Update: {
+          alt?: string
+          attribution_required?: boolean
+          category?: string
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          license?: string
+          source?: string
+          source_url?: string
+          tags?: string[]
+          url?: string
+        }
+        Relationships: []
+      }
       flag_keywords: {
         Row: {
           created_at: string
@@ -322,6 +406,33 @@ export type Database = {
           github_username?: string
           id?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      icon_favorites: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          icon_set: string
+          id: string
+          name: string
+          tags: string[]
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          icon_set: string
+          id?: string
+          name: string
+          tags?: string[]
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          icon_set?: string
+          id?: string
+          name?: string
+          tags?: string[]
         }
         Relationships: []
       }
@@ -368,6 +479,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      pexels_cache: {
+        Row: {
+          created_at: string
+          query: string
+          results: Json
+        }
+        Insert: {
+          created_at?: string
+          query: string
+          results?: Json
+        }
+        Update: {
+          created_at?: string
+          query?: string
+          results?: Json
+        }
+        Relationships: []
       }
       plan_providers: {
         Row: {
