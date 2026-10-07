@@ -1,3 +1,4 @@
+import { useSiteSettings } from "@/lib/site";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 function Dashboard() {
   const { user } = useSession();
   const qc = useQueryClient();
+  const { data: siteSettings } = useSiteSettings();
   const nav = useNavigate();
   const create = useServerFn(createProject);
   const publish = useServerFn(setPublished);
@@ -94,14 +96,18 @@ function Dashboard() {
         <section>
           {(() => {
             const pr: any = profile;
-            const st = hostingStatus({ planExpiresAt: pr?.plan_expires_at ?? null, planEndedAt: pr?.plan_ended_at ?? null, fallbackCanHost: false });
-            if (st.state === "active") return null;
+            const ss: any = siteSettings;
+            const exp = pr?.plan_expires_at ? new Date(pr.plan_expires_at).getTime() : 0;
+            const soon = exp > Date.now() && exp - Date.now() < 3 * 86400_000;
+            const st = hostingStatus({ planExpiresAt: pr?.plan_expires_at ?? null, planEndedAt: pr?.plan_ended_at ?? null, fallbackCanHost: false, graceDays: ss?.grace_days, deleteAfterDays: ss?.delete_after_days });
+            if (!soon && st.state === "active") return null;
             return (
-              <div className="mb-5 rounded-xl border border-destructive/50 bg-destructive/10 p-4 text-sm">
-                {st.state === "grace"
-                  ? <>আপনার প্যাকেজের মেয়াদ শেষ। আপগ্রেড বা রিনিউ না করলে <b>{bn(st.daysLeft)} দিন</b> পর প্রকাশিত ওয়েবসাইটগুলো বন্ধ হয়ে যেতে পারে।</>
-                  : <>আপনার প্যাকেজের মেয়াদ শেষ, ফ্রি প্যাকেজে হোস্টিং না থাকলে ওয়েবসাইট বন্ধ আছে।</>}{" "}
-                <Link to="/pricing" className="font-semibold text-cyan">প্যাকেজ আপগ্রেড করুন</Link>
+              <div className={`mb-5 rounded-xl border p-4 text-sm ${soon ? "border-warning/50 bg-warning/10" : "border-destructive/50 bg-destructive/10"}`}>
+                {soon ? <>আপনার প্ল্যান <b>{bn(Math.max(1, Math.ceil((exp - Date.now()) / 86400_000)))} দিন</b> পর শেষ হবে। ওয়েবসাইট চালু রাখতে আগেই রিনিউ করুন।</>
+                  : st.state === "grace" ? <>আপনার প্যাকেজের মেয়াদ শেষ। আপনার ওয়েবসাইটে এখন শুধু "প্ল্যান আপগ্রেড করুন" নোটিশ দেখাচ্ছে। <b>{bn(st.daysLeft)} দিন</b> পর সাইট বন্ধ হয়ে যাবে।</>
+                  : st.state === "offline" ? <>আপনার ওয়েবসাইট বন্ধ আছে। <b>{bn(st.daysToDelete)} দিনের মধ্যে</b> রিনিউ করুন, নইলে সাইটের ফাইল ও ডেটা স্থায়ীভাবে মুছে যাবে।</>
+                  : <>রিনিউ না করায় প্রকাশিত সাইটগুলো স্থায়ীভাবে মুছে ফেলা হয়েছে। প্রজেক্টগুলো আবার প্রকাশ করতে প্যাকেজ নিন।</>}{" "}
+                <Link to="/pricing" className="font-semibold text-cyan">{soon ? "রিনিউ করুন" : "প্যাকেজ আপগ্রেড করুন"}</Link>
               </div>
             );
           })()}
