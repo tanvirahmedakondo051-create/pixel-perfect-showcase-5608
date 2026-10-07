@@ -104,9 +104,17 @@ export const setCustomDomain = createServerFn({ method: "POST" })
       domain = data.domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
       if (!DOMAIN_RE.test(domain)) return { error: "সঠিক ডোমেইন দিন, যেমন myshop.com" };
     }
-    const { error } = await c.db.from("projects").update({ custom_domain: domain, domain_status: "pending", domain_found_ns: [], domain_checked_at: null }).eq("id", data.id);
+    const old = c.proj.custom_domain as string | null;
+    const { error } = await c.db.from("projects").update({ custom_domain: domain, domain_status: "pending", domain_found_ns: [], domain_checked_at: null, dns_status: "none" }).eq("id", data.id);
     if (error) return { error: error.code === "23505" ? "এই ডোমেইনটি অন্য একটি প্রজেক্টে যুক্ত আছে" : "ডোমেইন সেভ করা যায়নি" };
-    return { ok: true as const };
+    const { dnsAdd, dnsRemove } = await import("./deploy.server");
+    if (old && old !== domain) await dnsRemove(c.db, old);
+    let dns: "ok" | "error" | "none" = "none";
+    if (domain) {
+      dns = await dnsAdd(c.db, domain);
+      await c.db.from("projects").update({ dns_status: dns }).eq("id", data.id);
+    }
+    return { ok: true as const, dns };
   });
 
 export const checkCustomDomain = createServerFn({ method: "POST" })

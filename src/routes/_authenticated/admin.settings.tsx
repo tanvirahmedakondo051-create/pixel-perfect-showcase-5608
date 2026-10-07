@@ -193,7 +193,7 @@ function DeployServer({ f, set }: { f: any; set: (k: string) => (e: any) => void
   const [origin, setOrigin] = useState("");
   useEffect(() => { setOrigin(window.location.origin); }, []);
   const host = f.agent_host || "deploy.example.com";
-  const cmd = `curl -fsSL ${origin}/install-agent.sh | sudo HEXA_APP_URL=${origin} bash -s -- ${fresh || "<TOKEN>"} ${host} ${f.support_email || ""} ${f.agent_port || 8443}`.replace(/\s+/g, " ").trim();
+  const cmd = `curl -fsSL ${origin}/install-agent.sh | sudo HEXA_APP_URL=${origin} bash -s -- ${fresh || "<TOKEN>"} ${host} "${f.support_email || ""}" ${f.agent_port || 8443} ${f.ns1 || ""} ${f.ns2 || ""} ${f.server_ip || ""}`.replace(/\s+/g, " ").trim();
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">প্রকাশ বা লাইভ আপডেট চাপলে সাইটটি আপনার VPS এ স্ট্যাটিক ফাইল হিসেবে চলে যাবে (nginx + gzip + ক্যাশ + SSL)। এজেন্টের ঠিকানার DNS আপনার VPS এর IP তে পয়েন্ট করা থাকতে হবে।</p>
