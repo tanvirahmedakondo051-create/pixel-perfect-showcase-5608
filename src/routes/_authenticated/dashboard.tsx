@@ -74,7 +74,7 @@ function Dashboard() {
     qc.invalidateQueries({ queryKey: ["projects"] });
   };
 
-  const plan = profile?.plans as { name_bn: string; tokens_per_day: number; price_bdt: number; max_projects: number } | null;
+  const plan = profile?.plans as { name_bn: string; tokens_per_day: number; price_bdt: number; max_published: number } | null;
   const used = tokensToday(profile);
   const limit = plan?.tokens_per_day ?? 50000;
   const pct = Math.min(100, (used / limit) * 100);
@@ -160,7 +160,7 @@ function Dashboard() {
           </div>
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Layers className="size-4 text-cyan" /> মোট প্রজেক্ট</div>
-            <p className="mt-2 text-lg font-semibold">{bn(projects?.length ?? 0)}{plan && plan.max_projects >= 0 ? ` / ${bn(plan.max_projects)}` : ""}</p>
+            <p className="mt-2 text-lg font-semibold">{bn(projects?.length ?? 0)}</p>
           </div>
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Crown className="size-4 text-cyan" /> বর্তমান প্ল্যান</div>

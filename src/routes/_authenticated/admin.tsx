@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Wallet, Loader2, ArrowRight, Cpu, Package, Gauge, Settings, ShieldAlert, BarChart3 } from "lucide-react";
+import { LayoutDashboard, Users, Wallet, Loader2, ArrowRight, Cpu, Package, Gauge, Settings, ShieldAlert, BarChart3, Shapes } from "lucide-react";
 import { useIsAdmin, useSession } from "@/lib/auth";
 import { Logo } from "@/components/site/Brand";
 
@@ -15,6 +15,7 @@ const nav = [
   { to: "/admin/providers", label: "AI প্রোভাইডার", icon: Cpu },
   { to: "/admin/plans", label: "প্ল্যান", icon: Package },
   { to: "/admin/limits", label: "লিমিট", icon: Gauge },
+  { to: "/admin/assets", label: "অ্যাসেট", icon: Shapes },
   { to: "/admin/moderation", label: "মডারেশন", icon: ShieldAlert },
   { to: "/admin/analytics", label: "অ্যানালিটিক্স", icon: BarChart3 },
   { to: "/admin/settings", label: "সেটিংস", icon: Settings },

@@ -77,6 +77,36 @@ export type Database = {
         }
         Relationships: []
       }
+      assets: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          name: string
+          tags: string[]
+          type: string
+          url_or_code: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          name: string
+          tags?: string[]
+          type: string
+          url_or_code: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          tags?: string[]
+          type?: string
+          url_or_code?: string
+        }
+        Relationships: []
+      }
       aura_payments: {
         Row: {
           amount: number
@@ -226,6 +256,7 @@ export type Database = {
           id: string
           is_default: boolean
           max_projects: number
+          max_published: number
           name_bn: string
           name_en: string
           price_bdt: number
@@ -245,6 +276,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           max_projects?: number
+          max_published?: number
           name_bn: string
           name_en: string
           price_bdt?: number
@@ -264,6 +296,7 @@ export type Database = {
           id?: string
           is_default?: boolean
           max_projects?: number
+          max_published?: number
           name_bn?: string
           name_en?: string
           price_bdt?: number

@@ -28,7 +28,7 @@ function Plans() {
             <div className="flex items-center gap-2"><h3 className="text-lg font-semibold">{p.name_bn}</h3>{p.is_default && <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs text-cyan">ডিফল্ট</span>}</div>
             <p className="mt-1 text-2xl font-bold">৳{bn(p.price_bdt)}<span className="text-sm font-normal text-muted-foreground"> / {p.duration_days > 0 ? `${bn(p.duration_days)} দিন` : "আজীবন"}</span></p>
             <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-              <li>দৈনিক টোকেন: {bn(p.tokens_per_day)} · প্রজেক্ট: {bn(p.max_projects)}</li>
+              <li>দৈনিক টোকেন: {bn(p.tokens_per_day)} · প্রকাশ সীমা: {p.max_published < 0 ? "সীমাহীন" : bn(p.max_published)}</li>
               <li>প্রকাশ: {p.can_publish ? "হ্যাঁ" : "না"} · ডাউনলোড: {p.can_download ? "হ্যাঁ" : "না"} · কোড: {p.can_view_code ? "হ্যাঁ" : "না"}</li>
               <li>ব্যাজ: {p.show_badge ? "দেখাবে" : "দেখাবে না"}</li>
             </ul>

@@ -17,7 +17,11 @@ const STRICT_RULE = `
 
 STRICT OUTPUT RULE (MUST FOLLOW):
 - Output ONLY the raw HTML document, starting with <!DOCTYPE html> and ending with </html>.
-- NO JSON, NO tool calls (e.g. fs_write), NO markdown code fences, NO explanation before or after.`;
+- NO JSON, NO tool calls (e.g. fs_write), NO markdown code fences, NO explanation before or after.
+
+STYLE INSPIRATION: If the user provides an analyzed website (colors, fonts, layout), use the analyzed colors, fonts, and layout style as inspiration. Create ORIGINAL content, do not copy text or images.
+
+ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.`;
 
 function findHtmlInJson(v: any): string | null {
   if (typeof v === "string") return /<html|<!doctype/i.test(v) ? v : null;
@@ -123,12 +127,15 @@ export const Route = createFileRoute("/api/public/generate")({
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
 
+        const { data: libAssets } = await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
+        const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 600 || /^https?:/.test(a.url_or_code))
+          .map((a: any) => `- [${a.category}/${a.type}] ${a.name}: ${a.url_or_code}`).join("\n");
         const history = (project.messages as Msg[]) ?? [];
         const userContent = project.code_html
           ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।`
           : body.prompt;
         const messages = [
-          { role: "system", content: (settings.system_prompt ?? "") + STRICT_RULE },
+          { role: "system", content: (settings.system_prompt ?? "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") },
           ...history.filter((m) => m.role === "user").slice(-4).map((m) => ({ role: "user", content: m.content })),
           { role: "user", content: userContent },
         ];
