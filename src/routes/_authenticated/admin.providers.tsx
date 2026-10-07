@@ -106,18 +106,27 @@ function Providers() {
 }
 
 function SystemPrompt() {
+  return (
+    <>
+      <PromptEditor field="build_prompt" title="বিল্ড মোডের নির্দেশনা (ওয়েবসাইট তৈরি)" />
+      <PromptEditor field="plan_prompt" title="প্ল্যান মোডের নির্দেশনা (আলোচনা ও পরিকল্পনা)" />
+    </>
+  );
+}
+
+function PromptEditor({ field, title }: { field: "build_prompt" | "plan_prompt"; title: string }) {
   const { data: s } = useSiteSettings();
   const qc = useQueryClient();
   const [v, setV] = useState("");
-  useEffect(() => { if (s) setV(s.system_prompt); }, [s]);
+  useEffect(() => { if (s) setV((s as any)[field] ?? ""); }, [s, field]);
   return (
-    <Panel title="সিস্টেম প্রম্পট (সব প্রোভাইডারের জন্য)">
+    <Panel title={title}>
       <textarea className={`${inputCls} py-2 font-en`} rows={8} value={v} onChange={(e) => setV(e.target.value)} />
       <button className={`${btn} mt-3 bg-brand`} onClick={async () => {
-        const { error } = await supabase.from("site_settings").update({ system_prompt: v }).eq("id", 1);
+        const { error } = await supabase.from("site_settings").update({ [field]: v } as any).eq("id", 1);
         if (error) return toast.error("সেভ করা যায়নি");
         qc.invalidateQueries({ queryKey: ["site-settings"] });
-        toast.success("প্রম্পট সেভ হয়েছে");
+        toast.success("নির্দেশনা সেভ হয়েছে");
       }}>সেভ করুন</button>
     </Panel>
   );

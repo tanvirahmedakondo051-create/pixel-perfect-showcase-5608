@@ -30,7 +30,7 @@ export type SiteLookup = { subdomain: string } | { host: string };
 
 export async function renderPublishedSite(lookup: SiteLookup, appOrigin: string): Promise<Response> {
   const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
-  let q = db.from("projects").select("name, code_html, show_badge, user_id").eq("is_published", true);
+  let q = db.from("projects").select("name, code_html, published_html, show_badge, user_id").eq("is_published", true);
   if ("subdomain" in lookup) {
     q = q.eq("subdomain", lookup.subdomain);
   } else {
@@ -71,7 +71,7 @@ export async function renderPublishedSite(lookup: SiteLookup, appOrigin: string)
   if (p.show_badge) {
     extra += `<a href="${appOrigin}/" target="_blank" rel="noopener" style="position:fixed;right:12px;bottom:12px;z-index:2147483646;padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#4f46e5,#06b6d4);color:#fff;font:600 12px 'Hind Siliguri',sans-serif;text-decoration:none">Hexa AI দিয়ে তৈরি</a>`;
   }
-  let html = p.code_html || page(esc(p.name), `<h1>${esc(p.name)}</h1>`);
+  let html = (p as any).published_html || p.code_html || page(esc(p.name), `<h1>${esc(p.name)}</h1>`);
   if (!/<html/i.test(html)) html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(p.name)}</title></head><body>${html}</body></html>`;
   return new Response(inject(html, extra), { status: 200, headers: { ...headers, "Cache-Control": CACHE, "X-Robots-Tag": "all" } });
 }

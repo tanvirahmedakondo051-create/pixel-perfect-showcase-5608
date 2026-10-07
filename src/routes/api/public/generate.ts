@@ -5,9 +5,14 @@ const Body = z.object({
   projectId: z.string().uuid(),
   prompt: z.string().min(1).max(8000),
   providerId: z.string().uuid().optional().nullable(),
+  mode: z.enum(["plan", "build"]).optional().default("build"),
 });
 
-type Msg = { role: "user" | "assistant"; content: string; at: string };
+const PLAN_FORMAT = `
+
+FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on its own line as [[option text]]. Never output HTML or code.`;
+
+type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build" };
 
 function dhakaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
@@ -131,14 +136,22 @@ export const Route = createFileRoute("/api/public/generate")({
         const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 600 || /^https?:/.test(a.url_or_code))
           .map((a: any) => `- [${a.category}/${a.type}] ${a.name}: ${a.url_or_code}`).join("\n");
         const history = (project.messages as Msg[]) ?? [];
-        const userContent = project.code_html
+        const isPlan = body.mode === "plan";
+        const userContent = !isPlan && project.code_html
           ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।`
           : body.prompt;
-        const messages = [
-          { role: "system", content: (settings.system_prompt ?? "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") },
-          ...history.filter((m) => m.role === "user").slice(-4).map((m) => ({ role: "user", content: m.content })),
-          { role: "user", content: userContent },
-        ];
+        const s2 = settings as any;
+        const messages = isPlan
+          ? [
+              { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? "\n\nThe user already has a website; plan changes to it." : "") },
+              ...history.filter((m) => m.mode === "plan").slice(-10).map((m) => ({ role: m.role, content: m.content })),
+              { role: "user", content: body.prompt },
+            ]
+          : [
+              { role: "system", content: (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") },
+              ...history.filter((m) => m.role === "user" && m.mode !== "plan").slice(-4).map((m) => ({ role: "user", content: m.content })),
+              { role: "user", content: userContent },
+            ];
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
@@ -218,6 +231,18 @@ export const Route = createFileRoute("/api/public/generate")({
             }
 
             if (!tokens) tokens = Math.ceil((JSON.stringify(messages).length + full.length) / 4);
+            if (isPlan) {
+              const now = new Date().toISOString();
+              const reply = full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
+              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan" }, { role: "assistant", content: reply, at: now, mode: "plan" }];
+              await Promise.all([
+                db.from("projects").update({ messages: newMsgs }).eq("id", project.id),
+                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name }),
+                db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
+              ]);
+              send({ t: "done", tokens, html: "", plan: reply, used: used + tokens, limit });
+              return controller.close();
+            }
             const html = extractHtml(full);
             if (!html || !/<\w+/.test(html)) {
               send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। অন্যভাবে লিখে আবার চেষ্টা করুন।" });
@@ -230,11 +255,11 @@ export const Route = createFileRoute("/api/public/generate")({
             const now = new Date().toISOString();
             const newMsgs: Msg[] = [
               ...history,
-              { role: "user", content: body.prompt, at: now },
-              { role: "assistant", content: html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", at: now },
+              { role: "user", content: body.prompt, at: now, mode: "build" },
+              { role: "assistant", content: html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
             ];
             const update: any = { messages: newMsgs };
-            if (html) update.code_html = html;
+            if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
             if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = body.prompt.slice(0, 40);
 
