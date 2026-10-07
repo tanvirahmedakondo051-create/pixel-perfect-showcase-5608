@@ -6,9 +6,19 @@ export const Route = createFileRoute("/api/public/cron/expiry")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const denied = await authenticateCronRequest(request);
-        if (denied) return denied;
         const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
+        const given = request.headers.get("x-hexa-cron") ?? "";
+        let ok = false;
+        if (given) {
+          const { data: t } = await db.from("app_secrets").select("value").eq("name", "cron_token").maybeSingle();
+          const { timingSafeEqual, createHash } = await import("node:crypto");
+          const h = (v: string) => createHash("sha256").update(v).digest();
+          ok = !!t?.value && timingSafeEqual(h(given), h(t.value));
+        }
+        if (!ok) {
+          const denied = await authenticateCronRequest(request);
+          if (denied) return denied;
+        }
         const { effectivePlan } = await import("@/lib/plan.server");
         const { hostingStatus } = await import("@/lib/hosting");
         const { deployProject, removeDomains, getAgent, siteDomains } = await import("@/lib/deploy.server");
