@@ -139,19 +139,43 @@ export const Route = createFileRoute("/api/public/generate")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-        if (!token) return json(401, "লগইন করুন");
         const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
-        const { data: u } = await db.auth.getUser(token);
-        const user = u?.user;
-        if (!user) return json(401, "লগইন সেশন শেষ, আবার লগইন করুন");
-
+        // Two callers: the browser (creates a background job) or the database job runner (runs it, no browser needed).
+        const jobId = request.headers.get("x-hexa-job");
+        let job: any = null;
+        let user: any = null;
         let body: z.infer<typeof Body>;
-        try {
-          body = Body.parse(await request.json());
-        } catch {
-          return json(400, "অনুরোধটি সঠিক নয়");
+        if (jobId) {
+          const { data: sec } = await db.from("app_secrets").select("value").eq("name", "job_token").maybeSingle();
+          const { createHmac, timingSafeEqual } = await import("node:crypto");
+          const exp = Buffer.from(createHmac("sha256", sec?.value ?? "").update(jobId).digest("hex"));
+          const got = Buffer.from(request.headers.get("x-hexa-sig") ?? "");
+          if (!sec?.value || exp.length !== got.length || !timingSafeEqual(exp, got)) return json(401, "unauthorized");
+          const { data: j } = await db.from("generation_jobs").select("*").eq("id", jobId).maybeSingle();
+          if (!j || !["running", "queued"].includes(j.status)) return json(409, "job not active");
+          job = j;
+          const { data: au } = await db.auth.admin.getUserById(j.user_id);
+          user = au?.user;
+          if (!user) return json(404, "no user");
+          try { body = Body.parse(j.input); } catch { await db.rpc("job_push" as any, { _id: jobId, _events: [{ t: "error", msg: "অনুরোধটি সঠিক নয়" }], _status: "error" } as any); return json(400, "bad input"); }
+        } else {
+          const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+          if (!token) return json(401, "লগইন করুন");
+          const { data: u } = await db.auth.getUser(token);
+          user = u?.user;
+          if (!user) return json(401, "লগইন সেশন শেষ, আবার লগইন করুন");
+          try {
+            body = Body.parse(await request.json());
+          } catch {
+            return json(400, "অনুরোধটি সঠিক নয়");
+          }
         }
+        const failJob = async (status: number, msg: string) => {
+          if (job) await db.rpc("job_push" as any, { _id: job.id, _events: [{ t: "error", msg: msg === "COINS_OUT" ? "🪙 কয়েন শেষ!" : msg }], _status: "error" } as any);
+          return json(status, msg);
+        };
+        const ac = new AbortController();
+        const sig = AbortSignal.any([request.signal, ac.signal]);
 
         const { effectivePlan, allowedProviders } = await import("@/lib/plan.server");
         const [profile, { data: settings }, { data: project }] = await Promise.all([
