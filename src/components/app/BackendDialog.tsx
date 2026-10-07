@@ -27,7 +27,7 @@ export function BackendDialog({ open, onOpenChange, projectId, onChanged }: { op
     try {
       const res = await setup({ data: { projectId, prompt: ask } });
       if ("error" in res) return toast.error(res.error);
-      toast.success(res.created.length ? `${bn(res.created.length)}টি টেবিল তৈরি হয়েছে` : "নতুন কোনো টেবিল লাগেনি");
+      if ((res as any).warning) toast.warning((res as any).warning); else toast.success(res.created.length ? `${bn(res.created.length)}টি টেবিল তৈরি হয়েছে` : "নতুন কোনো টেবিল লাগেনি");
       if (res.limitHit) toast.info("টেবিলের সীমা পূর্ণ");
       setAsk(""); q.refetch(); onChanged();
     } finally { setBusy(false); }

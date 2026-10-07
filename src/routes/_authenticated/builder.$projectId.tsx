@@ -557,7 +557,7 @@ function Builder() {
                     try {
                       const r = await doSetup({ data: { projectId, prompt: beSuggest } });
                       if ("error" in r) return toast.error(r.error);
-                      toast.success(`✅ ব্যাকএন্ড চালু — ${bn(r.created.length)}টি টেবিল`);
+                      if ((r as any).warning) toast.warning((r as any).warning); else toast.success(`✅ ব্যাকএন্ড চালু — ${bn(r.created.length)}টি টেবিল`);
                       const again = beSuggest; setBeSuggest(null);
                       qc.invalidateQueries({ queryKey: ["project", projectId] }); qc.invalidateQueries({ queryKey: ["profile"] });
                       if (html) send(`ব্যাকএন্ড টেবিলগুলো ব্যবহার করে এটা কাজ করাও: ${again}`, "build");
