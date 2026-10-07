@@ -169,6 +169,33 @@ export type Database = {
         }
         Relationships: []
       }
+      github_connections: {
+        Row: {
+          access_token_encrypted: string
+          avatar_url: string
+          created_at: string
+          github_username: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted: string
+          avatar_url?: string
+          created_at?: string
+          github_username?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string
+          avatar_url?: string
+          created_at?: string
+          github_username?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_requests: {
         Row: {
           amount: number
@@ -361,8 +388,44 @@ export type Database = {
           },
         ]
       }
+      project_versions: {
+        Row: {
+          changelog_bn: string
+          code_html: string
+          created_at: string
+          id: string
+          project_id: string
+          version_number: number
+        }
+        Insert: {
+          changelog_bn?: string
+          code_html: string
+          created_at?: string
+          id?: string
+          project_id: string
+          version_number: number
+        }
+        Update: {
+          changelog_bn?: string
+          code_html?: string
+          created_at?: string
+          id?: string
+          project_id?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
+          changes_since_publish: number
           code_html: string
           created_at: string
           custom_domain: string | null
@@ -370,17 +433,22 @@ export type Database = {
           domain_found_ns: string[]
           domain_status: string
           flag_reason: string | null
+          github_repo: string | null
           id: string
           is_flagged: boolean
           is_published: boolean
           messages: Json
           name: string
+          published_code_hash: string | null
+          published_html: string | null
+          published_version: number
           show_badge: boolean
           subdomain: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          changes_since_publish?: number
           code_html?: string
           created_at?: string
           custom_domain?: string | null
@@ -388,17 +456,22 @@ export type Database = {
           domain_found_ns?: string[]
           domain_status?: string
           flag_reason?: string | null
+          github_repo?: string | null
           id?: string
           is_flagged?: boolean
           is_published?: boolean
           messages?: Json
           name?: string
+          published_code_hash?: string | null
+          published_html?: string | null
+          published_version?: number
           show_badge?: boolean
           subdomain?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          changes_since_publish?: number
           code_html?: string
           created_at?: string
           custom_domain?: string | null
@@ -406,11 +479,15 @@ export type Database = {
           domain_found_ns?: string[]
           domain_status?: string
           flag_reason?: string | null
+          github_repo?: string | null
           id?: string
           is_flagged?: boolean
           is_published?: boolean
           messages?: Json
           name?: string
+          published_code_hash?: string | null
+          published_html?: string | null
+          published_version?: number
           show_badge?: boolean
           subdomain?: string | null
           updated_at?: string
@@ -424,6 +501,7 @@ export type Database = {
           announcement_color: string
           announcement_text: string
           aurapay_enabled: boolean
+          build_prompt: string
           free_block_publish: boolean
           hosting_domain: string
           id: number
@@ -435,6 +513,7 @@ export type Database = {
           ns3: string
           ns4: string
           payment_instructions: string
+          plan_prompt: string
           rate_limit_per_minute: number
           require_email_verify: boolean
           server_ip: string
@@ -450,6 +529,7 @@ export type Database = {
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
+          build_prompt?: string
           free_block_publish?: boolean
           hosting_domain?: string
           id?: number
@@ -461,6 +541,7 @@ export type Database = {
           ns3?: string
           ns4?: string
           payment_instructions?: string
+          plan_prompt?: string
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string
@@ -476,6 +557,7 @@ export type Database = {
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
+          build_prompt?: string
           free_block_publish?: boolean
           hosting_domain?: string
           id?: number
@@ -487,6 +569,7 @@ export type Database = {
           ns3?: string
           ns4?: string
           payment_instructions?: string
+          plan_prompt?: string
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string
