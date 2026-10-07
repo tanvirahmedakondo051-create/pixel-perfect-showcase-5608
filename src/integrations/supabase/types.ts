@@ -382,6 +382,62 @@ export type Database = {
         }
         Relationships: []
       }
+      generation_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          events: Json
+          heartbeat_at: string
+          id: string
+          input: Json
+          mode: string
+          origin: string
+          project_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          events?: Json
+          heartbeat_at?: string
+          id?: string
+          input?: Json
+          mode?: string
+          origin: string
+          project_id: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          events?: Json
+          heartbeat_at?: string
+          id?: string
+          input?: Json
+          mode?: string
+          origin?: string
+          project_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       github_connections: {
         Row: {
           access_token_encrypted: string
@@ -1147,6 +1203,12 @@ export type Database = {
         }
         Returns: boolean
       }
+      job_push: {
+        Args: { _events: Json; _id: string; _status: string }
+        Returns: string
+      }
+      kick_job: { Args: { _id: string }; Returns: undefined }
+      rescue_jobs: { Args: never; Returns: number }
     }
     Enums: {
       app_role: "admin" | "user"
