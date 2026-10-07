@@ -144,6 +144,9 @@
   animation: float-orb 12s ease-in-out infinite;
   pointer-events: none;
 }
+@media (prefers-reduced-motion: reduce) {
+  .orb { animation: none; }
+}
 
 @keyframes progress-slide {
   0% { transform: translateX(-100%); }
