@@ -3,9 +3,11 @@ import { z } from "zod";
 
 const Body = z.object({
   projectId: z.string().uuid(),
-  prompt: z.string().min(1).max(8000),
+  prompt: z.string().max(8000).optional().default(""),
   providerId: z.string().uuid().optional().nullable(),
   mode: z.enum(["plan", "build"]).optional().default("build"),
+  intent: z.enum(["run", "ask"]).optional().default("run"),
+  resumeId: z.string().uuid().optional().nullable(),
   attachments: z.array(z.object({ path: z.string().max(200), url: z.string().url().max(400), name: z.string().max(120), type: z.string().max(60) })).max(4).optional().default([]),
 });
 
@@ -13,7 +15,33 @@ const PLAN_FORMAT = `
 
 FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on its own line as [[option text]]. Never output HTML or code.`;
 
-type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build" };
+type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
+type Step = { id: string; title: string; brief: string };
+const MARK = "<!--HEXA:NEXT-->";
+const OUTLINE_SYS = `You plan a single-page website. Split it into 4-7 build steps (sections), first = header/navigation + hero, last = footer. Output ONLY JSON: {"sections":[{"id":"hero","title":"<short Bangla title>","brief":"<one-line English brief of content>"}]}`;
+const DEFAULT_STEPS: Step[] = [
+  { id: "hero", title: "হেডার ও হিরো", brief: "navigation bar and hero section" },
+  { id: "features", title: "সেবা / বৈশিষ্ট্য", brief: "services or features grid" },
+  { id: "about", title: "আমাদের সম্পর্কে", brief: "about section" },
+  { id: "contact", title: "যোগাযোগ", brief: "contact section with form" },
+  { id: "footer", title: "ফুটার", brief: "footer" },
+];
+function parseSteps(t: string): Step[] {
+  try {
+    const j = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+    const s = (j.sections ?? []).filter((x: any) => x?.title).slice(0, 7).map((x: any, i: number) => ({ id: String(x.id ?? i), title: String(x.title).slice(0, 40), brief: String(x.brief ?? x.title).slice(0, 200) }));
+    return s.length >= 2 ? s : DEFAULT_STEPS;
+  } catch { return DEFAULT_STEPS; }
+}
+function cleanFrag(t: string) {
+  let s = t.trim();
+  const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
+  if (f) s = f[1].trim();
+  s = s.replace(/<!doctype[^>]*>|<\/?(html|head|body)[^>]*>/gi, "");
+  const a = s.search(/<(section|footer|div|header|nav|main)/i);
+  if (a > 0) s = s.slice(a);
+  return s.trim();
+}
 
 function dhakaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
@@ -112,6 +140,15 @@ export const Route = createFileRoute("/api/public/generate")({
         if (!profile || !settings) return json(500, "সার্ভারে সমস্যা হয়েছে");
         if (!project || project.user_id !== user.id) return json(404, "প্রজেক্ট পাওয়া যায়নি");
         if (profile.is_banned) return json(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
+        let resumeCp: any = null;
+        if (body.resumeId) {
+          const { data } = await db.from("task_checkpoints" as any).select("*").eq("id", body.resumeId).maybeSingle();
+          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return json(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
+          resumeCp = data;
+          body.mode = "build";
+        }
+        const prompt: string = resumeCp ? resumeCp.prompt : body.prompt;
+        if (!prompt.trim()) return json(400, "অনুরোধটি সঠিক নয়");
         if (settings.require_email_verify && !user.email_confirmed_at) return json(403, "আগে ইমেইল ভেরিফাই করুন");
 
         const today = dhakaToday();
@@ -128,7 +165,7 @@ export const Route = createFileRoute("/api/public/generate")({
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if ((recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute)) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
         const providers = await allowedProviders(db, profile.plans);
         if (!providers?.length) return json(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
@@ -156,7 +193,7 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         let extra = "";
         if (atts.length) extra += `\n\nUSER UPLOADED FILES (use these exact URLs in the site when relevant, e.g. as <img src>):\n${atts.map((a) => `- ${a.name} (${a.type}): ${a.url}`).join("\n")}`;
-        const link = body.prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
+        const link = prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
         if (link) {
           const { analyzeUrl, analysisContext } = await import("@/lib/analyze.server");
           const r = await analyzeUrl(link).catch(() => null);
@@ -175,27 +212,56 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
         const hasSite = !isPlan && !!project.code_html;
-        const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
+        const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
 
         const planMessages = [
           { role: "system", content: (s2.plan_prompt ?? "") + skillCtx + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
           ...summaryMsg,
           ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: withExtra(body.prompt) },
+          { role: "user", content: withExtra(prompt) },
         ];
         const diffMessages = hasSite ? [
           { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${body.prompt}`) },
+          { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${prompt}`) },
         ] : null;
         const fullMessages = [
           { role: "system", content: buildSystem },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : body.prompt) },
+          { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : prompt) },
         ];
+
+        // Clarifying questions before a new site build (max 3).
+        if (body.intent === "ask") {
+          if (isPlan || project.code_html) return Response.json({ questions: [] });
+          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
+          for (const p of ordered) {
+            try {
+              const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
+                method: "POST", signal: request.signal,
+                headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
+                body: JSON.stringify({ model: p.model, stream: false, max_tokens: 600, temperature: 0.3, messages: [{ role: "system", content: sys + skillCtx.slice(0, 1500) }, { role: "user", content: prompt }] }),
+              });
+              if (!r.ok) continue;
+              const j: any = await r.json();
+              const t = String(j.choices?.[0]?.message?.content ?? "");
+              const tk = j.usage?.total_tokens ?? Math.ceil((sys.length + prompt.length + t.length) / 4);
+              const coins = Math.round((tk / tpc) * 100) / 100;
+              await Promise.all([
+                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: "প্রশ্ন তৈরি" } as any) : null,
+                db.from("profiles").update({ tokens_used_today: used + tk, last_reset_date: today }).eq("id", user.id),
+              ]);
+              let qs: any[] = [];
+              try { qs = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)).questions ?? []; } catch { /* none */ }
+              const questions = qs.filter((q) => q?.q).slice(0, 3).map((q) => ({ q: String(q.q).slice(0, 200), options: (Array.isArray(q.options) ? q.options : []).slice(0, 4).map((o: any) => String(o).slice(0, 60)) }));
+              return Response.json({ questions, coins });
+            } catch { if (request.signal.aborted) break; }
+          }
+          return Response.json({ questions: [] });
+        }
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
@@ -289,23 +355,32 @@ export const Route = createFileRoute("/api/public/generate")({
               } catch (e) { console.error("summary", e); }
             };
 
-            const charge = async (tokens: number, saved: number) => {
+            let coinsLeft = coinsBefore;
+            let chargedCoins = 0;
+            const charge = async (tokens: number, saved: number, reason?: string) => {
               const coins = Math.round((tokens / tpc) * 100) / 100;
+              coinsLeft -= coins; chargedCoins += coins; used += tokens;
               await Promise.all([
-                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: (isPlan ? "পরিকল্পনা: " : "ওয়েবসাইট: ") + body.prompt.slice(0, 60) } as any) : null,
-                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name, tokens_saved: saved } as any),
-                db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
+                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: reason ?? ((isPlan ? "পরিকল্পনা: " : "ওয়েবসাইট: ") + prompt.slice(0, 60)) } as any) : null,
+                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider?.name ?? null, tokens_saved: saved } as any),
+                db.from("profiles").update({ tokens_used_today: used, last_reset_date: today }).eq("id", user.id),
               ]);
+              return coins;
             };
+            const mid = () => crypto.randomUUID();
+            const r2 = (n: number) => Math.round(n * 100) / 100;
+            const userMsg = (): Msg => ({ role: "user", content: prompt, at: new Date().toISOString(), mode: body.mode, id: mid(), files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) });
 
             if (isPlan) {
               const r = await run(planMessages, true);
               if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
               const now = new Date().toISOString();
               const reply = r.full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
-              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any, { role: "assistant", content: reply, at: now, mode: "plan" }];
+              const coins = r2(r.tokens / tpc);
+              const am: Msg = { role: "assistant", content: reply, at: now, mode: "plan", id: mid(), ms: Date.now() - startedAt, coins, title: "প্ল্যান: " + prompt.slice(0, 40) };
+              const newMsgs: Msg[] = [...history, userMsg(), am];
               await Promise.all([db.from("projects").update({ messages: newMsgs }).eq("id", project.id), charge(r.tokens, 0)]);
-              send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit, coins: Math.round((r.tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - r.tokens / tpc), ms: Date.now() - startedAt });
+              send({ t: "done", tokens: r.tokens, html: "", plan: reply, msg: am, used, limit, coins, balance: Math.max(0, coinsLeft), ms: am.ms });
               await finishSummary(newMsgs);
               return controller.close();
             }
@@ -313,7 +388,84 @@ export const Route = createFileRoute("/api/public/generate")({
             let html = "";
             let tokens = 0;
             let saved = 0;
-            if (diffMessages) {
+            let baseHistory: Msg[] = history;
+
+            // ---- Staged build (new site or resume): section by section with checkpoints ----
+            if (resumeCp || !project.code_html) {
+              let steps: Step[]; let done: Step[] = []; let partial = ""; let taskId: string;
+              if (resumeCp) {
+                done = (resumeCp.completed_steps as Step[]) ?? [];
+                steps = [...done, ...((resumeCp.pending_steps as Step[]) ?? [])];
+                partial = resumeCp.partial_html ?? "";
+                taskId = resumeCp.task_id;
+                baseHistory = history.map((m) => (m.kind === "paused" && m.checkpointId === resumeCp.id ? { ...m, resumed: true } : m));
+                await db.from("task_checkpoints").update({ status: "resumed" }).eq("id", resumeCp.id);
+              } else {
+                baseHistory = [...history, userMsg()];
+                send({ t: "progress", step: "পেজের গঠন ঠিক করছি...", tokens: 0 });
+                const r = await run([{ role: "system", content: OUTLINE_SYS + skillCtx }, ...summaryMsg, { role: "user", content: withExtra(prompt) }], false);
+                if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
+                tokens += r.tokens; baseTokens = tokens;
+                await charge(r.tokens, 0, "গঠন পরিকল্পনা: " + prompt.slice(0, 50));
+                steps = parseSteps(r.full);
+                taskId = mid();
+              }
+              const titles = steps.map((s) => s.title);
+              const total = steps.length;
+              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").slice(0, 7000);
+              let lastCp: string | null = resumeCp?.id ?? null;
+              const savePause = async () => {
+                const pct = Math.round((done.length / total) * 100);
+                const { data: cp } = await db.from("task_checkpoints").insert({ project_id: project.id, user_id: user.id, task_id: taskId, progress_percent: pct, completed_steps: done, pending_steps: steps.slice(done.length), partial_html: partial, prompt, status: "paused" } as any).select("id").single();
+                const pm: Msg = { role: "assistant", kind: "paused", content: `⏸️ ${pct}% সম্পূর্ণ — ${done.length}টি অংশ হয়েছে, ${total - done.length}টি বাকি`, at: new Date().toISOString(), mode: "build", id: mid(), ms: Date.now() - startedAt, coins: r2(chargedCoins), title: "কাজ থেমে আছে", checkpointId: cp?.id, percent: pct, doneTitles: done.map((s) => s.title), leftTitles: steps.slice(done.length).map((s) => s.title) };
+                const msgs = [...baseHistory, pm];
+                const upd: any = { messages: msgs };
+                if (partial) upd.code_html = partial.replace(MARK, "");
+                if (project.name === "নতুন প্রজেক্ট" && !history.length) upd.name = prompt.slice(0, 40);
+                await db.from("projects").update(upd).eq("id", project.id);
+                return pm;
+              };
+              for (let i = done.length; i < total; i++) {
+                if (coinsLeft <= 0) {
+                  const pm = await savePause();
+                  send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: 0, coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens });
+                  return controller.close();
+                }
+                const s = steps[i];
+                send({ t: "progress", step: `${s.title} বানাচ্ছি... (${i + 1}/${total})`, tokens, steps: titles, stepIndex: i });
+                let r: { full: string; tokens: number } | null;
+                if (!partial) {
+                  r = await run([
+                    { role: "system", content: buildSystem },
+                    { role: "user", content: withExtra(`Website request: ${prompt}\n\nFull plan of sections: ${steps.map((x) => `${x.title} (${x.brief})`).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this section inside <body>: ${s.title} — ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
+                  ], true);
+                  if (r) { const h = extractHtml(r.full); if (/<body/i.test(h)) partial = h.includes(MARK) ? h : h.replace(/<\/body>/i, `${MARK}\n</body>`); }
+                } else {
+                  r = await run([
+                    { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + `\n\nOUTPUT RULE: Output ONLY the raw HTML fragment for ONE section (e.g. a <section> or <footer>). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>.` },
+                    { role: "user", content: `Existing <head>:\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY this section: ${s.title} — ${s.brief}` },
+                  ], true);
+                  if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
+                }
+                if (!r || !partial || request.signal.aborted) {
+                  if (done.length || resumeCp) {
+                    const pm = await savePause();
+                    if (!request.signal.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
+                  } else if (!request.signal.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
+                  return controller.close();
+                }
+                tokens += r.tokens; baseTokens = tokens;
+                await charge(r.tokens, 0, `ওয়েবসাইট (${s.title}): ` + prompt.slice(0, 40));
+                done.push(s);
+                const pct = Math.round((done.length / total) * 100);
+                const clean = partial.replace(MARK, "");
+                const { data: cp } = await db.from("task_checkpoints").insert({ project_id: project.id, user_id: user.id, task_id: taskId, progress_percent: pct, completed_steps: done, pending_steps: steps.slice(done.length), partial_html: partial, prompt, status: done.length === total ? "done" : "running" } as any).select("id").single();
+                lastCp = cp?.id ?? lastCp;
+                await db.from("projects").update({ code_html: clean }).eq("id", project.id);
+                send({ t: "checkpoint", id: lastCp, percent: pct, done: done.length, total, html: clean });
+              }
+              html = partial.replace(MARK, "");
+            } else if (diffMessages) {
               send({ t: "notice-soft", msg: "শুধু পরিবর্তিত অংশ লেখা হচ্ছে..." });
               const r = await run(diffMessages, true);
               if (r) {
@@ -329,7 +481,7 @@ export const Route = createFileRoute("/api/public/generate")({
                 }
               }
             }
-            if (!html) {
+            if (!html && !resumeCp && project.code_html) {
               const r = await run(fullMessages, true);
               if (!r && !tokens) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
               if (r) { tokens += r.tokens; html = extractHtml(r.full); }
@@ -341,22 +493,21 @@ export const Route = createFileRoute("/api/public/generate")({
 
             const { data: kws } = await db.from("flag_keywords").select("keyword");
             const lower = html.toLowerCase();
-            const hit = (kws ?? []).find((k) => lower.includes(k.keyword.toLowerCase()) || body.prompt.toLowerCase().includes(k.keyword.toLowerCase()));
+            const hit = (kws ?? []).find((k) => lower.includes(k.keyword.toLowerCase()) || prompt.toLowerCase().includes(k.keyword.toLowerCase()));
 
             const now = new Date().toISOString();
-            const newMsgs: Msg[] = [
-              ...history,
-              { role: "user", content: body.prompt, at: now, mode: "build", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any,
-              { role: "assistant", content: html ? (saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
-            ];
+            const unpaid = Math.max(0, tokens - Math.round(chargedCoins * tpc));
+            const finalCoins = r2(chargedCoins + unpaid / tpc);
+            const am: Msg = { role: "assistant", content: html ? (resumeCp ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
+            const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
             if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
-            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = body.prompt.slice(0, 40);
+            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);
 
-            await Promise.all([db.from("projects").update(update).eq("id", project.id), charge(tokens, saved)]);
+            await Promise.all([db.from("projects").update(update).eq("id", project.id), unpaid > 0 ? charge(unpaid, saved) : null]);
             const savedPct = saved ? Math.round((saved / (saved + tokens)) * 100) : 0;
-            send({ t: "done", tokens, html, used: used + tokens, limit, saved, savedPct, coins: Math.round((tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - tokens / tpc), ms: Date.now() - startedAt });
+            send({ t: "done", tokens, html, msg: am, used, limit, saved, savedPct, coins: finalCoins, balance: Math.max(0, coinsLeft), ms: am.ms });
             await finishSummary(newMsgs);
             controller.close();
           },

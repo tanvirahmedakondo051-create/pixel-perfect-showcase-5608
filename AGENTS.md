@@ -20,3 +20,4 @@
 - The builder has one chat + preview layout (no tabs); assets open in a popover.
 - Skill packs live in `skill_packs` and GitHub import analysis in `project_analysis`; `generate.ts` injects both into plan/build system prompts — keeps site-type expertise and imported-codebase context admin-editable and server-side.
 - Coin balances change only through the security-definer `add_coins` SQL function (service role) which also writes `coin_transactions`; a trigger blocks user edits to `profiles.coins` and daily refill runs as a pg_cron SQL job — keeps the ledger and balance consistent and tamper-proof.
+- New-site builds run section-by-section in `generate.ts`, charging coins and writing a `task_checkpoints` row after each step; when coins run out the task pauses and `resumeId` continues only pending steps — users never pay twice for finished parts.

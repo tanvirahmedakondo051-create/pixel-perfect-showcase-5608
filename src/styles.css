@@ -149,3 +149,10 @@
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
 }
+
+/* Code highlighting (dark) */
+.hljs-dark { color: var(--foreground); }
+.hljs-dark .hljs-tag, .hljs-dark .hljs-name, .hljs-dark .hljs-selector-tag, .hljs-dark .hljs-keyword { color: var(--cyan, oklch(0.8 0.13 210)); }
+.hljs-dark .hljs-attr, .hljs-dark .hljs-attribute, .hljs-dark .hljs-property { color: oklch(0.78 0.12 270); }
+.hljs-dark .hljs-string, .hljs-dark .hljs-number { color: oklch(0.82 0.13 150); }
+.hljs-dark .hljs-comment { color: var(--muted-foreground); font-style: italic; }

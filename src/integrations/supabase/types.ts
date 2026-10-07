@@ -771,6 +771,59 @@ export type Database = {
         }
         Relationships: []
       }
+      task_checkpoints: {
+        Row: {
+          completed_steps: Json
+          created_at: string
+          expires_at: string
+          id: string
+          partial_html: string
+          pending_steps: Json
+          progress_percent: number
+          project_id: string
+          prompt: string
+          status: string
+          task_id: string
+          user_id: string
+        }
+        Insert: {
+          completed_steps?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          partial_html?: string
+          pending_steps?: Json
+          progress_percent?: number
+          project_id: string
+          prompt?: string
+          status?: string
+          task_id: string
+          user_id: string
+        }
+        Update: {
+          completed_steps?: Json
+          created_at?: string
+          expires_at?: string
+          id?: string
+          partial_html?: string
+          pending_steps?: Json
+          progress_percent?: number
+          project_id?: string
+          prompt?: string
+          status?: string
+          task_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_checkpoints_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usage_logs: {
         Row: {
           created_at: string
