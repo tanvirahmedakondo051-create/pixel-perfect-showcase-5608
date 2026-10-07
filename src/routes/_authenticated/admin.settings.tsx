@@ -82,7 +82,6 @@ function Settings() {
             <Field label="নেমসার্ভার ২"><input className={`${inputCls} font-en`} value={f.ns2} onChange={set("ns2")} placeholder="ns2.example.com" /></Field>
             <Field label="নেমসার্ভার ৩ (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.ns3} onChange={set("ns3")} /></Field>
             <Field label="নেমসার্ভার ৪ (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.ns4} onChange={set("ns4")} /></Field>
-            <Field label="VPS সার্ভার IP"><input className={`${inputCls} font-en`} value={f.server_ip} onChange={set("server_ip")} placeholder="123.45.67.89" /></Field>
             <Field label="ফ্রি সাবডোমেইনের মূল ডোমেইন (ঐচ্ছিক)"><input className={`${inputCls} font-en`} value={f.hosting_domain} onChange={set("hosting_domain")} placeholder="sites.example.com" /></Field>
           </div>
           <NginxConfig f={f} />
