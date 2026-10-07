@@ -36,7 +36,7 @@ export function SiteHeader() {
               </Link>
             ))}
             {user ? (
-              <CoinChip /><Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">ড্যাশবোর্ড</Link>
+              <><CoinChip /><Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">ড্যাশবোর্ড</Link></>
             ) : (
               <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">লগইন</Link>
             )}

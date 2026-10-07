@@ -177,7 +177,7 @@ function Dashboard() {
             <p className="mt-2 text-xs text-muted-foreground">প্রতিদিন রাত ১২টায় +{bn(daily)} কয়েন (সর্বোচ্চ {bn(cap)})</p>
             {coins <= 0 && <p className="mt-2 text-xs text-destructive">🪙 কয়েন শেষ! কাল আবার পাবেন, অথবা <Link to="/pricing" className="font-semibold text-cyan">আপগ্রেড করুন</Link></p>}
             <button onClick={() => setShowHist((v) => !v)} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border text-sm">🪙 হিস্টোরি</button>
-            {showHist && user && <div className="mt-2 max-h-80 overflow-y-auto"><CoinHistory userId={user.id} /></div>
+            {showHist && user && <div className="mt-2 max-h-80 overflow-y-auto"><CoinHistory userId={user.id} /></div>}
           </div>
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-success" /> সেভ হওয়া কয়েন</div>
