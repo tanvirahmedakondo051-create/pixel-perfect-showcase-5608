@@ -14,7 +14,7 @@ export const listActiveProviders = createServerFn({ method: "GET" })
 
 async function planFor(supabase: any, userId: string) {
   const { data } = await supabase.from("profiles").select("is_banned, plans(*)").eq("id", userId).single();
-  return data as { is_banned: boolean; plans: { max_projects: number; show_badge: boolean; price_bdt: number; can_publish: boolean } | null } | null;
+  return data as { is_banned: boolean; plans: { max_published: number; show_badge: boolean; price_bdt: number; can_publish: boolean } | null } | null;
 }
 
 export const createProject = createServerFn({ method: "POST" })
@@ -24,11 +24,6 @@ export const createProject = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const prof = await planFor(supabase, userId);
     if (prof?.is_banned) return { error: "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে" };
-    const max = prof?.plans?.max_projects ?? 3;
-    if (max >= 0) {
-      const { count } = await supabase.from("projects").select("id", { count: "exact", head: true }).eq("user_id", userId);
-      if ((count ?? 0) >= max) return { error: `আপনার প্ল্যানে সর্বোচ্চ ${max}টি প্রজেক্ট রাখা যায়। Pro নিন বা পুরনো প্রজেক্ট ডিলিট করুন।` };
-    }
     let row: { name: string; code_html: string; messages: any } = { name: data.name || "নতুন প্রজেক্ট", code_html: "", messages: [] };
     if (data.copyFrom) {
       const { data: src } = await supabase.from("projects").select("name, code_html, messages").eq("id", data.copyFrom).single();

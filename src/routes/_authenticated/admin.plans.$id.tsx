@@ -16,7 +16,7 @@ export const Route = createFileRoute("/_authenticated/admin/plans/$id")({
 
 const empty = {
   name_en: "", name_bn: "", price_bdt: 0, features: "", is_default: false,
-  tokens_per_day: 50000, max_projects: 3, rate_limit_per_minute: 10,
+  tokens_per_day: 50000, max_projects: -1, max_published: 1, rate_limit_per_minute: 10,
   can_publish: true, can_download: true, can_view_code: true,
   show_badge: true, allow_custom_domain: false, duration_days: 30,
   default_provider_id: "" as string,
@@ -89,7 +89,7 @@ function PlanEdit() {
       <Panel title="লিমিট">
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="দৈনিক টোকেন"><input type="number" className={inputCls} value={f.tokens_per_day} onChange={num("tokens_per_day")} /></Field>
-          <Field label="সর্বোচ্চ প্রজেক্ট (-১ = সীমাহীন)"><input type="number" className={inputCls} value={f.max_projects} onChange={num("max_projects")} /></Field>
+          <Field label="সর্বোচ্চ প্রকাশিত সাইট (-১ = সীমাহীন)"><input type="number" className={inputCls} value={f.max_published} onChange={num("max_published")} /></Field>
           <Field label="প্রতি মিনিটে অনুরোধ"><input type="number" className={inputCls} value={f.rate_limit_per_minute} onChange={num("rate_limit_per_minute")} /></Field>
         </div>
       </Panel>
