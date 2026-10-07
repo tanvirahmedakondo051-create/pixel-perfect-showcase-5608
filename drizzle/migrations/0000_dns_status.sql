@@ -1,0 +1,1 @@
+ALTER TABLE public.projects ADD COLUMN IF NOT EXISTS dns_status text NOT NULL DEFAULT 'none';
