@@ -140,6 +140,15 @@ export const Route = createFileRoute("/api/public/generate")({
         if (!profile || !settings) return json(500, "সার্ভারে সমস্যা হয়েছে");
         if (!project || project.user_id !== user.id) return json(404, "প্রজেক্ট পাওয়া যায়নি");
         if (profile.is_banned) return json(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
+        let resumeCp: any = null;
+        if (body.resumeId) {
+          const { data } = await db.from("task_checkpoints" as any).select("*").eq("id", body.resumeId).maybeSingle();
+          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return json(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
+          resumeCp = data;
+          body.mode = "build";
+        }
+        const prompt: string = resumeCp ? resumeCp.prompt : body.prompt;
+        if (!prompt.trim()) return json(400, "অনুরোধটি সঠিক নয়");
         if (settings.require_email_verify && !user.email_confirmed_at) return json(403, "আগে ইমেইল ভেরিফাই করুন");
 
         const today = dhakaToday();
@@ -156,7 +165,7 @@ export const Route = createFileRoute("/api/public/generate")({
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if ((recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute)) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
         const providers = await allowedProviders(db, profile.plans);
         if (!providers?.length) return json(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
@@ -224,6 +233,35 @@ export const Route = createFileRoute("/api/public/generate")({
           ...recentMsgs,
           { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : prompt) },
         ];
+
+        // Clarifying questions before a new site build (max 3).
+        if (body.intent === "ask") {
+          if (isPlan || project.code_html) return Response.json({ questions: [] });
+          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
+          for (const p of ordered) {
+            try {
+              const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
+                method: "POST", signal: request.signal,
+                headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
+                body: JSON.stringify({ model: p.model, stream: false, max_tokens: 600, temperature: 0.3, messages: [{ role: "system", content: sys + skillCtx.slice(0, 1500) }, { role: "user", content: prompt }] }),
+              });
+              if (!r.ok) continue;
+              const j: any = await r.json();
+              const t = String(j.choices?.[0]?.message?.content ?? "");
+              const tk = j.usage?.total_tokens ?? Math.ceil((sys.length + prompt.length + t.length) / 4);
+              const coins = Math.round((tk / tpc) * 100) / 100;
+              await Promise.all([
+                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: "প্রশ্ন তৈরি" } as any) : null,
+                db.from("profiles").update({ tokens_used_today: used + tk, last_reset_date: today }).eq("id", user.id),
+              ]);
+              let qs: any[] = [];
+              try { qs = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)).questions ?? []; } catch { /* none */ }
+              const questions = qs.filter((q) => q?.q).slice(0, 3).map((q) => ({ q: String(q.q).slice(0, 200), options: (Array.isArray(q.options) ? q.options : []).slice(0, 4).map((o: any) => String(o).slice(0, 60)) }));
+              return Response.json({ questions, coins });
+            } catch { if (request.signal.aborted) break; }
+          }
+          return Response.json({ questions: [] });
+        }
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
