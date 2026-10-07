@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatComposer, type Chip } from "@/components/app/ChatComposer";
 import { useSkillPacks } from "@/lib/skills";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { uploadChatFile } from "@/lib/upload.functions";
 import { GithubDialog } from "@/components/app/GithubDialog";
 import { VersionsDialog } from "@/components/app/VersionsDialog";
@@ -79,6 +80,7 @@ function Builder() {
   const [verOpen, setVerOpen] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { data: packs } = useSkillPacks();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -401,7 +403,7 @@ function Builder() {
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : (m as any).kind === "analysis" ? "max-w-full rounded-bl-sm border border-cyan/40 bg-cyan/5" : "rounded-bl-sm bg-muted"}`}>
+              <div key={i} className={`min-w-0 break-words text-[15px] leading-relaxed ${m.role === "user" ? "ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground" : (m as any).kind === "analysis" ? "rounded-2xl border border-cyan/40 bg-cyan/5 px-4 py-3" : "max-w-full px-1"}`}>
                 {(m as any).kind === "analysis" ? (
                   <>
                     <div className="whitespace-pre-line">{m.content}</div>
