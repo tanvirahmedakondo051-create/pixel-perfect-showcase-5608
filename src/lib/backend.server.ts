@@ -92,3 +92,66 @@ export function injectBackend(html: string, origin: string, projectId: string) {
   const tag = CLIENT(`${origin}/api/public/db/${projectId}`);
   return /<head[^>]*>/i.test(clean) ? clean.replace(/<head[^>]*>/i, (m) => m + tag) : tag + clean;
 }
+
+export const SCHEMA_SYS = `You design a tiny backend for a website. From the user's request, output ONLY JSON:
+{"tables":[{"name":"snake_case_english","private":false,"description":"<short Bangla>","columns":[{"name":"snake_case","type":"text|number|boolean|date|json"}]}]}
+Rules: max 5 tables, max 12 columns each. Do NOT include id, project_id, created_at, owner_id (automatic). Visitor accounts (login/signup) are built in — never create a users table. Set "private": true only for per-visitor data (e.g. cart, my orders). Public form submissions (contact, booking) are "private": false.`;
+
+
+export const BACKEND_KEYWORDS = /\b(log ?in|sign ?up|sign ?in|register|database|backend|admin ?panel|dashboard|reservation|booking|order|checkout|cart)\b|লগইন|লগ ইন|সাইন ?আপ|সাইন ?ইন|রেজিস্ট্রেশন|নিবন্ধন|ডেটাবেস|ডাটাবেস|ব্যাকএন্ড|অ্যাডমিন|এডমিন|রিজার্ভেশন|বুকিং|অর্ডার|কার্ট/i;
+
+function parseSchemaJson(t: string): any {
+  t = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const a = t.indexOf("{"), z = t.lastIndexOf("}");
+  if (a < 0 || z < a) return null;
+  try { return JSON.parse(t.slice(a, z + 1)); } catch { return null; }
+}
+
+/** Designs tables with the AI (1 retry), creates them, turns the backend on. Never fails just because the AI output was bad. */
+export async function autoSetupBackend(db: any, p: any, userId: string, prompt: string, providers: any[], tokensPerCoin: number, existing?: any[]) {
+  const ex: any[] = existing ?? (await db.from("backend_tables").select("table_name, schema_json").eq("project_id", p.id)).data ?? [];
+  const ctxTables = ex.map((t: any) => `${t.table_name}(${(t.schema_json?.columns ?? []).map((c: any) => c.name).join(",")})`).join("; ");
+  const userMsg = (ctxTables ? `Existing tables (do not repeat): ${ctxTables}\n\n` : "") + prompt.slice(0, 3000);
+  let parsed: any = null; let tokens = 0;
+  for (let attempt = 0; attempt < 2 && !parsed?.tables; attempt++) {
+    const sys = SCHEMA_SYS + (attempt ? "\n\nCRITICAL: Output ONLY the JSON object. No explanation, no markdown." : "");
+    for (const pr of providers) {
+      try {
+        const r = await fetch(pr.base_url.replace(/\/+$/, "") + "/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${pr.api_key}`, "Content-Type": "application/json", ...((pr.custom_headers as Record<string, string>) ?? {}) },
+          body: JSON.stringify({ model: pr.model, temperature: 0.2, max_tokens: 1500, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!r.ok) continue;
+        const j: any = await r.json();
+        const t = String(j.choices?.[0]?.message?.content ?? "");
+        tokens += j.usage?.total_tokens ?? Math.ceil((sys.length + userMsg.length + t.length) / 4);
+        parsed = parseSchemaJson(t);
+        break;
+      } catch (e) { console.error("schema ai", e); }
+    }
+  }
+  const coins = Math.round((tokens / Math.max(1, tokensPerCoin)) * 100) / 100;
+  if (coins > 0) await db.rpc("add_coins", { _user: userId, _amount: -coins, _type: "spend", _reason: "ব্যাকএন্ড সেটআপ" });
+  const { maxTables } = await backendLimits(db);
+  const have = new Set(ex.map((t: any) => t.table_name));
+  const created: string[] = [];
+  const wanted: any[] = Array.isArray(parsed?.tables) ? parsed.tables : [];
+  for (const t of wanted) {
+    const name = String(t?.name ?? "").toLowerCase();
+    if (!NAME_RE.test(name) || have.has(name)) continue;
+    if (have.size >= maxTables) break;
+    const columns = (Array.isArray(t.columns) ? t.columns : []).slice(0, 12)
+      .map((c: any) => ({ name: String(c?.name ?? "").toLowerCase(), type: ["text", "number", "boolean", "date", "json"].includes(c?.type) ? c.type : "text" }))
+      .filter((c: any) => NAME_RE.test(c.name) && !["id", "project_id", "created_at", "owner_id"].includes(c.name));
+    if (!columns.length) continue;
+    const { error } = await db.from("backend_tables").insert({ project_id: p.id, table_name: name, schema_json: { columns, private: !!t.private, description: String(t.description ?? "").slice(0, 200) } });
+    if (!error) { have.add(name); created.push(name); }
+  }
+  const upd: any = { backend_enabled: true };
+  if (p.code_html) { const { appOrigin } = await import("@/lib/origin.server"); upd.code_html = injectBackend(p.code_html, appOrigin(), p.id); }
+  await db.from("projects").update(upd).eq("id", p.id);
+  const warning = !parsed?.tables && !created.length ? "টেবিল বানানো যায়নি, লগইন চালু হয়েছে" : undefined;
+  return { ok: true as const, created, coins, limitHit: have.size >= maxTables && created.length < wanted.length, warning };
+}

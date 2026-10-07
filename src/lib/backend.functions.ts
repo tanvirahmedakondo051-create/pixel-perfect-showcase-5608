@@ -9,10 +9,6 @@ async function ownerDb(context: { userId: string }, projectId: string) {
   return { db, p };
 }
 
-const SCHEMA_SYS = `You design a tiny backend for a website. From the user's request, output ONLY JSON:
-{"tables":[{"name":"snake_case_english","private":false,"description":"<short Bangla>","columns":[{"name":"snake_case","type":"text|number|boolean|date|json"}]}]}
-Rules: max 5 tables, max 12 columns each. Do NOT include id, project_id, created_at, owner_id (automatic). Visitor accounts (login/signup) are built in — never create a users table. Set "private": true only for per-visitor data (e.g. cart, my orders). Public form submissions (contact, booking) are "private": false.`;
-
 /** Asks the AI for a schema and creates the project's tables (1-click "Auto Setup"). */
 export const setupBackend = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -29,49 +25,8 @@ export const setupBackend = createServerFn({ method: "POST" })
     if (!profile || Number((profile as any).coins ?? 0) <= 0) return { error: "কয়েন শেষ" };
     const providers = await allowedProviders(db, profile.plans);
     if (!providers?.length) return { error: "এখনো কোনো AI সংযুক্ত নেই" };
-    const ctxTables = (existing ?? []).map((t: any) => `${t.table_name}(${(t.schema_json?.columns ?? []).map((c: any) => c.name).join(",")})`).join("; ");
-    let parsed: any = null; let tokens = 0;
-    for (const pr of providers) {
-      try {
-        const r = await fetch(pr.base_url.replace(/\/+$/, "") + "/chat/completions", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${pr.api_key}`, "Content-Type": "application/json", ...((pr.custom_headers as Record<string, string>) ?? {}) },
-          body: JSON.stringify({ model: pr.model, temperature: 0.2, max_tokens: 1500, messages: [
-            { role: "system", content: SCHEMA_SYS },
-            { role: "user", content: (ctxTables ? `Existing tables (do not repeat): ${ctxTables}\n\n` : "") + data.prompt },
-          ] }),
-          signal: AbortSignal.timeout(60000),
-        });
-        if (!r.ok) continue;
-        const j: any = await r.json();
-        const t = String(j.choices?.[0]?.message?.content ?? "");
-        tokens = j.usage?.total_tokens ?? Math.ceil((SCHEMA_SYS.length + data.prompt.length + t.length) / 4);
-        parsed = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
-        break;
-      } catch (e) { console.error("schema ai", e); }
-    }
-    if (!parsed?.tables?.length) return { error: "AI টেবিল ডিজাইন করতে পারেনি, আবার চেষ্টা করুন" };
-    const coins = Math.round((tokens / Math.max(1, settings?.tokens_per_coin ?? 10000)) * 100) / 100;
-    if (coins > 0) await db.rpc("add_coins" as any, { _user: context.userId, _amount: -coins, _type: "spend", _reason: "ব্যাকএন্ড সেটআপ" } as any);
-
-    const { maxTables } = await b.backendLimits(db);
-    const have = new Set((existing ?? []).map((t: any) => t.table_name));
-    const created: string[] = [];
-    for (const t of parsed.tables as any[]) {
-      const name = String(t.name ?? "").toLowerCase();
-      if (!b.NAME_RE.test(name) || have.has(name)) continue;
-      if (have.size >= maxTables) break;
-      const columns = (Array.isArray(t.columns) ? t.columns : []).slice(0, 12)
-        .map((c: any) => ({ name: String(c.name ?? "").toLowerCase(), type: ["text", "number", "boolean", "date", "json"].includes(c.type) ? c.type : "text" }))
-        .filter((c: any) => b.NAME_RE.test(c.name) && !["id", "project_id", "created_at", "owner_id"].includes(c.name));
-      if (!columns.length) continue;
-      const { error } = await db.from("backend_tables").insert({ project_id: p.id, table_name: name, schema_json: { columns, private: !!t.private, description: String(t.description ?? "").slice(0, 200) } });
-      if (!error) { have.add(name); created.push(name); }
-    }
-    const upd: any = { backend_enabled: true };
-    if (p.code_html) { const { appOrigin } = await import("@/lib/origin.server"); upd.code_html = b.injectBackend(p.code_html, appOrigin(), p.id); }
-    await db.from("projects").update(upd).eq("id", p.id);
-    return { ok: true, created, coins, limitHit: have.size >= maxTables && created.length < parsed.tables.length };
+    const out = await b.autoSetupBackend(db, p, context.userId, data.prompt, providers, settings?.tokens_per_coin ?? 10000, existing ?? []);
+    return out;
   });
 
 export const listBackend = createServerFn({ method: "GET" })
