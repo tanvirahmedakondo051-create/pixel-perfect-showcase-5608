@@ -425,9 +425,37 @@ function Builder() {
                 <div className="mt-5"><SkillGrid /></div>
               </div>
             )}
-            {messages.map((m, i) => (
-              <div key={i} className={`min-w-0 break-words text-[15px] leading-relaxed ${m.role === "user" ? "ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground" : (m as any).kind === "analysis" ? "rounded-2xl border border-cyan/40 bg-cyan/5 px-4 py-3" : "max-w-full px-1"}`}>
-                {(m as any).kind === "analysis" ? (
+            {expiring > 0 && <p className="rounded-xl border border-border bg-card/50 p-2.5 text-xs text-muted-foreground">⏳ {bn(expiring)}টি থেমে থাকা কাজের চেকপয়েন্ট আগামী ২৪ ঘণ্টায় মুছে যাবে — এখনই চালিয়ে যান।</p>}
+            {messages.some((m) => m.bookmarked) && (
+              <button onClick={() => setOnlyMarked(!onlyMarked)} className={`flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-xs ${onlyMarked ? "border-cyan text-cyan" : "border-border"}`}><Bookmark className="size-3.5" />{onlyMarked ? "সব মেসেজ দেখুন" : "শুধু বুকমার্ক"}</button>
+            )}
+            {messages.map((m, i) => (onlyMarked && !m.bookmarked) ? null : (
+              m.kind === "paused" && m.role === "assistant" ? (
+                <PausedCard key={m.id ?? i} m={m} canResume={coins > 0} busy={streaming} onResume={() => m.checkpointId && exec("", "build", [], m.checkpointId)} />
+              ) : m.role === "assistant" && m.kind !== "analysis" ? (
+                <MessageCard key={m.id ?? i} m={m} onMore={() => setDetail(m)} onBookmark={() => toggleBookmark(i)}
+                  onPreview={html && m.mode !== "plan" ? () => { setShowCode(false); setMobilePreview(true); } : undefined}
+                  plan={m.mode === "plan" ? (
+                    <>
+                      <RichText text={m.content.replace(OPT_RE, "").replace(/\n{3,}/g, "\n\n").trim()} />
+                      {i === messages.length - 1 && !streaming && [...m.content.matchAll(OPT_RE)].length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {[...m.content.matchAll(OPT_RE)].map((x, k) => (
+                            <button key={k} onClick={() => send(x[1], "plan")} className="min-h-10 rounded-full border border-cyan/50 px-3 text-xs text-cyan hover:bg-cyan/10">{x[1]}</button>
+                          ))}
+                        </div>
+                      )}
+                      {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
+                        <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
+                      )}
+                    </>
+                  ) : undefined}>
+                  <RichText text={m.content} />
+                  {(m.ms || typeof m.coins === "number") && <p className="mt-1 text-xs text-muted-foreground">⏱️ {m.ms ? fmtDuration(m.ms) : "—"} • 🪙 {typeof m.coins === "number" ? fmtCoins(m.coins) : "—"} কয়েন</p>}
+                </MessageCard>
+              ) : (
+              <div key={m.id ?? i} id={m.id ? `msg-${m.id}` : undefined} className={`min-w-0 break-words text-[15px] leading-relaxed ${m.role === "user" ? "ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground" : "rounded-2xl border border-cyan/40 bg-cyan/5 px-4 py-3"}`}>
+                {m.kind === "analysis" ? (
                   <>
                     <div className="whitespace-pre-line">{m.content}</div>
                     {!!(m as any).files_map?.length && (
@@ -439,20 +467,6 @@ function Builder() {
                       </details>
                     )}
                   </>
-                ) : m.mode === "plan" && m.role === "assistant" ? (
-                  <>
-                    <div className="whitespace-pre-line">{m.content.replace(OPT_RE, "").replace(/\n{3,}/g, "\n\n").trim()}</div>
-                    {i === messages.length - 1 && !streaming && [...m.content.matchAll(OPT_RE)].length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {[...m.content.matchAll(OPT_RE)].map((x, k) => (
-                          <button key={k} onClick={() => send(x[1], "plan")} className="min-h-10 rounded-full border border-cyan/50 px-3 text-xs text-cyan hover:bg-cyan/10">{x[1]}</button>
-                        ))}
-                      </div>
-                    )}
-                    {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
-                      <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
-                    )}
-                  </>
                 ) : <span className="whitespace-pre-line">{m.content}</span>}
                 {!!m.files?.length && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -461,12 +475,20 @@ function Builder() {
                       : <span key={k} className="flex items-center gap-1 rounded-lg bg-background/30 px-2 py-1 text-xs"><FileText className="size-3" />{f.name}</span>)}
                   </div>
                 )}
-                {m.role === "assistant" && m.content.startsWith("✓") && i === messages.length - 1 && html && (
-                  <button onClick={() => setMobilePreview(true)} className="mt-2 flex min-h-10 items-center gap-1 text-cyan md:hidden"><Eye className="size-4" /> প্রিভিউ দেখুন</button>
+              </div>
+              )
+            ))}
+            {streaming && prog && (
+              <div className="space-y-2">
+                <LiveStatusRow step={prog.step} open={progOpen} onClick={() => setProgOpen(!progOpen)} />
+                {progOpen && <ProgressCard p={prog} tpc={tpc} onCancel={() => abortRef.current?.abort()} />}
+                {progOpen && !!steps.length && (
+                  <ol className="space-y-1 px-1 text-xs">
+                    {steps.map((s, k) => <li key={k} className={k < stepIdx ? "text-success" : k === stepIdx ? "text-cyan" : "text-muted-foreground"}>{k < stepIdx ? "✅" : k === stepIdx ? "🔄" : "⏳"} {s}</li>)}
+                  </ol>
                 )}
               </div>
-            ))}
-            {streaming && prog && <ProgressCard p={prog} tpc={tpc} onCancel={() => abortRef.current?.abort()} />}
+            )}
             {!streaming && doneSum && <p className="text-xs text-success">{doneSum}</p>}
             {!streaming && coins <= 0 && (
               <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm">{outMsg} <Link to="/pricing" className="font-semibold text-cyan">প্ল্যান দেখুন</Link></div>
