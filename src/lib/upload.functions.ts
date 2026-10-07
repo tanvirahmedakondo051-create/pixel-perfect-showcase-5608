@@ -20,6 +20,6 @@ export const uploadChatFile = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await supabaseAdmin.storage.from("uploads").upload(`${p.id}/${file}`, bytes, { contentType: data.type, upsert: false });
     if (error) { console.error("upload", error); return { error: "আপলোড করা যায়নি" }; }
-    const { appOrigin } = await import("./user.functions");
+    const { appOrigin } = await import("./origin.server");
     return { ok: true as const, path: `${p.id}/${file}`, url: `${appOrigin()}/uploads/${p.id}/${file}`, name: data.name, type: data.type };
   });

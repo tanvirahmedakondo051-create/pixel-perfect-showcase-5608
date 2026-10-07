@@ -1,14 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { getRequest } from "@tanstack/react-start/server";
-
-export function appOrigin() {
-  const r = getRequest();
-  const u = new URL(r.url);
-  const sandbox = u.hostname === "localhost" ? r.headers.get("x-forwarded-host") : null;
-  return sandbox ? `https://${sandbox}` : u.origin;
-}
 
 export const listActiveProviders = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -58,6 +50,7 @@ export const setPublished = createServerFn({ method: "POST" })
     if (!data.publish) {
       await supabaseAdmin.from("projects").update({ is_published: false }).eq("id", data.id);
       const { deployProject } = await import("./deploy.server");
+      const { appOrigin } = await import("./origin.server");
       await deployProject(supabaseAdmin, data.id, appOrigin());
       return { ok: true as const, subdomain: proj.subdomain };
     }
@@ -82,6 +75,7 @@ export const setPublished = createServerFn({ method: "POST" })
       await pushLive(supabaseAdmin, userId, full as any, proj.code_html);
     }
     const { deployProject } = await import("./deploy.server");
+      const { appOrigin } = await import("./origin.server");
     const dep = await deployProject(supabaseAdmin, data.id, appOrigin());
     return { ok: true as const, subdomain, deployedUrl: dep.url ?? null, deployError: dep.ok ? null : "সার্ভারে পাঠানো যায়নি" };
   });
