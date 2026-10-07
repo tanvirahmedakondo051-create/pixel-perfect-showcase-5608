@@ -239,7 +239,7 @@ export const Route = createFileRoute("/api/public/generate")({
         const { backendContext, injectBackend } = await import("@/lib/backend.server");
         const { appOrigin } = await import("@/lib/origin.server");
         const beCtx = (project as any).backend_enabled ? await backendContext(db, project.id, isReact) : "";
-        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
+        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + freeAssets + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").slice(-2).map((m) => ({ role: "user", content: m.content.slice(0, 600) }));
