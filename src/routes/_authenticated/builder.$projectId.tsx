@@ -584,6 +584,7 @@ function Builder() {
                           ))}
                         </div>
                       )}
+                      <button onClick={() => setPlanView(m.content)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm"><FileText className="size-4" /> প্ল্যান খুলুন</button>
                       {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
                         <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
                       )}
@@ -691,6 +692,12 @@ function Builder() {
           <BackendDialog open={beOpen} onOpenChange={setBeOpen} projectId={projectId} onChanged={() => { qc.invalidateQueries({ queryKey: ["project", projectId] }); qc.invalidateQueries({ queryKey: ["profile"] }); }} />
           <FilesDialog open={filesOpen} onOpenChange={setFilesOpen} files={((project as any)?.files as any[]) ?? []} />
           <CheckpointsDialog open={cpOpen} onOpenChange={setCpOpen} projectId={projectId} onRollback={(h) => { setHtml(h); qc.invalidateQueries({ queryKey: ["project", projectId] }); }} />
+          <PlanDialog
+            plan={planView}
+            onClose={() => setPlanView(null)}
+            onApprove={() => { const p = planView; setPlanView(null); if (p) approvePlan(p); }}
+            onChange={() => { setPlanView(null); setMode("plan"); taRef.current?.focus(); }}
+          />
           <Dialog open={skillOpen} onOpenChange={setSkillOpen}>
             <DialogContent><DialogHeader><DialogTitle>সাইটের ধরন বেছে নিন</DialogTitle></DialogHeader><SkillGrid /></DialogContent>
           </Dialog>
