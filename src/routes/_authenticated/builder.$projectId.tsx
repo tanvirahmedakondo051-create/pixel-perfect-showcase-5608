@@ -1,7 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+const AssetPanel = lazy(() => import("@/components/app/AssetPanel"));
+const AnalyzerPanel = lazy(() => import("@/components/app/AnalyzerPanel"));
 import { toast } from "sonner";
 import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2 } from "lucide-react";
 import { DomainDialog } from "@/components/app/DomainDialog";
@@ -49,6 +51,7 @@ function Builder() {
   const [usedOverride, setUsedOverride] = useState<number | null>(null);
   const [published, setPub] = useState<{ on: boolean; sub: string | null }>({ on: false, sub: null });
   const [domainOpen, setDomainOpen] = useState(false);
+  const [tab, setTab] = useState<"chat" | "analyze" | "assets">("chat");
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -264,7 +267,23 @@ function Builder() {
             <Progress value={pct} className={`mt-1.5 h-1.5 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
           </div>
 
-          <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          <div className="grid grid-cols-3 gap-1 border-b border-border p-2">
+            {([["chat", "চ্যাট"], ["analyze", "সাইট দেখে বানান"], ["assets", "অ্যাসেট"]] as const).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)} className={`min-h-11 rounded-lg px-1 text-xs sm:text-sm ${tab === k ? "bg-primary text-primary-foreground" : "hover:bg-accent"}`}>{l}</button>
+            ))}
+          </div>
+          {tab !== "chat" && (
+            <div className="min-h-0 flex-1">
+              <Suspense fallback={<div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-cyan" /></div>}>
+                {tab === "analyze" ? (
+                  <AnalyzerPanel disabled={streaming} onBuild={(p) => { setTab("chat"); send(p); }} />
+                ) : (
+                  <AssetPanel onPick={(t) => { setInput((v) => (v ? v + "\n" : "") + t); setTab("chat"); toast.success("অ্যাসেট বার্তায় যোগ হয়েছে"); setTimeout(autosize); }} />
+                )}
+              </Suspense>
+            </div>
+          )}
+          <div className={`flex-1 space-y-3 overflow-y-auto p-4 ${tab !== "chat" ? "hidden" : ""}`}>
             {!messages.length && (
               <div className="pt-6 text-center">
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
@@ -292,7 +311,7 @@ function Builder() {
             <div ref={endRef} />
           </div>
 
-          <div className="border-t border-border bg-background/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className={`border-t border-border bg-background/80 p-3 ${tab !== "chat" ? "hidden" : ""} pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <div className="flex items-end gap-2 rounded-2xl border border-input bg-card p-2 focus-within:border-cyan">
               <textarea
                 ref={taRef}

@@ -42,7 +42,7 @@ function lottieSrc(a: Asset) {
 }
 
 function Preview({ a }: { a: Asset }) {
-  if (a.type === "css") return <div className="size-full rounded-lg" style={{ cssText: a.url_or_code } as any} ref={(el) => { if (el) el.style.cssText += a.url_or_code; }} />;
+  if (a.type === "css") return <div className="size-full rounded-lg" ref={(el) => { if (el) el.style.cssText += a.url_or_code; }} />;
   if (a.type === "svg") return <div className="grid size-full place-items-center rounded-lg bg-white p-1 [&_svg]:max-h-full [&_svg]:max-w-full" dangerouslySetInnerHTML={{ __html: a.url_or_code }} />;
   if (a.type === "png") return <img src={a.url_or_code} alt={a.name} loading="lazy" className="size-full rounded-lg object-contain" />;
   if (a.type === "lottie") return createElement("lottie-player", { src: lottieSrc(a), autoplay: true, loop: true, style: { width: "100%", height: "100%" } });
