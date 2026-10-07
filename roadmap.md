@@ -1,5 +1,9 @@
-# Roadmap — 8 builder features
+# Roadmap
 
-- [x] Round 1: diff editing (5), smart context (6), chat summaries + saved-tokens stat (8)
-- [ ] Round 2: 4-step spec plan mode (2), templates (7), user preferences / memory (4) — waiting for user check of round 1
-- [ ] Round 3: premium UI components (1), 1-click site backend: login / data / AuraPay (3)
+- [x] 8 features round 1: diff editing, smart context, chat summaries
+- [ ] 8 features round 2: 4-step spec plan, templates, preferences — waiting for user go-ahead
+- [ ] 8 features round 3: premium UI components, 1-click site backend — waiting for user go-ahead
+- [x] Builder redesign: single chat + preview, no tabs; upload, link auto-analyze, asset popover, GitHub in toolbar
+- [x] VPS deploy agent (deploy-agent.js + install-agent.sh) + admin server settings + live deploy status
+- [x] Plan expiry: notice page (grace), offline, permanent delete, 3-day warning, hourly cron, admin settings
+- [x] Chat file upload (vision + use in site)

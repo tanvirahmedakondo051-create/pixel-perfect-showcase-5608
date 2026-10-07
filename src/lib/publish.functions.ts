@@ -25,7 +25,10 @@ export const liveUpdate = createServerFn({ method: "POST" })
       return { error: "নতুন কোনো পরিবর্তন নেই" };
     }
     const r = await pushLive(supabaseAdmin, context.userId, p, p.code_html);
-    return { ok: true as const, ...r };
+    const { deployProject } = await import("./deploy.server");
+    const { appOrigin } = await import("./origin.server");
+    const dep = await deployProject(supabaseAdmin, p.id, appOrigin());
+    return { ok: true as const, ...r, deployError: dep.ok ? null : "সার্ভারে পাঠানো যায়নি" };
   });
 
 export const listVersions = createServerFn({ method: "GET" })
@@ -49,5 +52,8 @@ export const rollbackVersion = createServerFn({ method: "POST" })
     const { hashHtml } = await import("./publish.server");
     const { error } = await supabaseAdmin.from("projects").update({ code_html: v.code_html, published_html: v.code_html, published_code_hash: hashHtml(v.code_html), changes_since_publish: 0 }).eq("id", data.id);
     if (error) return { error: "রোলব্যাক করা যায়নি" };
+    const { deployProject } = await import("./deploy.server");
+    const { appOrigin } = await import("./origin.server");
+    await deployProject(supabaseAdmin, data.id, appOrigin());
     return { ok: true as const, version: v.version_number as number, html: v.code_html as string };
   });

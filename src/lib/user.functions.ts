@@ -49,6 +49,9 @@ export const setPublished = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     if (!data.publish) {
       await supabaseAdmin.from("projects").update({ is_published: false }).eq("id", data.id);
+      const { deployProject } = await import("./deploy.server");
+      const { appOrigin } = await import("./origin.server");
+      await deployProject(supabaseAdmin, data.id, appOrigin());
       return { ok: true as const, subdomain: proj.subdomain };
     }
     if (!proj.code_html) return { error: "আগে একটি ওয়েবসাইট বানান, তারপর প্রকাশ করুন" };
@@ -71,7 +74,10 @@ export const setPublished = createServerFn({ method: "POST" })
     if (full && (!full.published_html || hashHtml(full.published_html) !== hashHtml(proj.code_html))) {
       await pushLive(supabaseAdmin, userId, full as any, proj.code_html);
     }
-    return { ok: true as const, subdomain };
+    const { deployProject } = await import("./deploy.server");
+      const { appOrigin } = await import("./origin.server");
+    const dep = await deployProject(supabaseAdmin, data.id, appOrigin());
+    return { ok: true as const, subdomain, deployedUrl: dep.url ?? null, deployError: dep.ok ? null : "সার্ভারে পাঠানো যায়নি" };
   });
 
 const DOMAIN_RE = /^(?=.{4,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;

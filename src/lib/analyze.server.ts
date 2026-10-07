@@ -1,6 +1,4 @@
-import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+// Server-only: fetch a public website and extract its colours, fonts, sections and category.
 
 export type Analysis = {
   url: string;
@@ -47,10 +45,9 @@ const CATS: [string, RegExp][] = [
   ["ভ্রমণ / হোটেল", /travel|hotel|tour|booking|flight/i],
 ];
 
-export const analyzeWebsite = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: { url: string }) => z.object({ url: z.string().min(3).max(500) }).parse(d))
-  .handler(async ({ data }): Promise<{ error: string } | { ok: true; analysis: Analysis }> => {
+export async function analyzeUrl(url: string): Promise<{ error: string } | { ok: true; analysis: Analysis }> {
+  const data = { url };
+  {
     let u: URL;
     try {
       u = new URL(/^https?:\/\//i.test(data.url) ? data.url : "https://" + data.url);
@@ -121,4 +118,14 @@ export const analyzeWebsite = createServerFn({ method: "POST" })
       ok: true,
       analysis: { url: u.toString(), title, description, colors, fonts: [...fonts].slice(0, 5), sections: sections.length ? sections : ["হেডার", "মূল কনটেন্ট", "ফুটার"], category },
     };
-  });
+  }
+}
+
+export function analysisContext(a: Analysis) {
+  return `ANALYZED WEBSITE (${a.url}) — use as STYLE INSPIRATION only, create ORIGINAL content, do not copy text or images:
+- Title: ${a.title}
+- Category: ${a.category}
+- Colors: ${a.colors.join(", ")}
+- Fonts: ${a.fonts.join(", ") || "unknown"}
+- Layout sections: ${a.sections.join(" → ")}`;
+}

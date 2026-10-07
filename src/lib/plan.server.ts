@@ -33,7 +33,7 @@ export async function applyPlan(db: any, userId: string, planId: string) {
   let base = Date.now();
   if (prof?.plan_id === planId && prof.plan_expires_at && new Date(prof.plan_expires_at).getTime() > base) base = new Date(prof.plan_expires_at).getTime();
   const expires = days > 0 ? new Date(base + days * 86400_000).toISOString() : null;
-  await db.from("profiles").update({ plan_id: planId, plan_expires_at: expires, plan_ended_at: null }).eq("id", userId);
+  await db.from("profiles").update({ plan_id: planId, plan_expires_at: expires, plan_ended_at: null, sites_deleted_at: null }).eq("id", userId);
 }
 
 const AURA = "https://pay.aurapay.top/api/payment";

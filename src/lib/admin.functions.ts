@@ -147,3 +147,38 @@ export const adminSetAuraKey = createServerFn({ method: "POST" })
     if (error) return { error: "সেভ করা যায়নি" };
     return { ok: true };
   });
+
+export const adminGetDeployToken = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { data } = await db.from("app_secrets").select("value").eq("name", "deploy_token").maybeSingle();
+    return { masked: data?.value ? mask(data.value) : "" };
+  });
+
+/** Generates a fresh random deploy token, saves it, and returns it once so the admin can paste it into the VPS install command. */
+export const adminNewDeployToken = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { randomBytes } = await import("node:crypto");
+    const token = randomBytes(32).toString("hex");
+    const { error } = await db.from("app_secrets").upsert({ name: "deploy_token", value: token, updated_at: new Date().toISOString() });
+    if (error) return { error: "সেভ করা যায়নি" };
+    return { ok: true as const, token };
+  });
+
+export const adminTestAgent = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { getAgent } = await import("./deploy.server");
+    const agent = await getAgent(db);
+    if (!agent) return { error: "সার্ভার ঠিকানা বা টোকেন দেওয়া হয়নি" };
+    try {
+      const r = await fetch(agent.url + "/health", { signal: AbortSignal.timeout(10000) });
+      return r.ok ? { ok: true as const } : { error: `সার্ভার সাড়া দিয়েছে কিন্তু সমস্যা (${r.status})` };
+    } catch {
+      return { error: "সার্ভারে সংযোগ হয়নি — ঠিকানা, পোর্ট ও SSL যাচাই করুন" };
+    }
+  });
