@@ -23,7 +23,21 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
   const [busy, setBusy] = useState(false);
 
   const google = async () => {
+    const h = window.location.hostname;
+    const onLovable = h.endsWith(".lovable.app") || h.includes("lovableproject.com") || h === "localhost";
+    setBusy(true);
+    if (!onLovable) {
+      // Self-hosted (VPS) domain: direct OAuth, browser redirects back to /login
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: window.location.origin + "/login" },
+      });
+      setBusy(false);
+      if (error) toast.error("গুগল লগইন ব্যর্থ হয়েছে");
+      return;
+    }
     const r = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin + "/login" });
+    setBusy(false);
     if (r.error) return toast.error("গুগল লগইন ব্যর্থ হয়েছে");
     if (r.redirected) return;
     nav({ to: "/dashboard" });
@@ -57,7 +71,7 @@ export function AuthCard({ mode }: { mode: "login" | "signup" }) {
         <Logo className="justify-center" />
         <h1 className="mt-6 text-center text-2xl font-bold">{mode === "login" ? "লগইন করুন" : "নতুন অ্যাকাউন্ট খুলুন"}</h1>
         <p className="mt-1 text-center text-sm text-muted-foreground">{mode === "login" ? "আপনার প্রজেক্টে ফিরে যান" : "ফ্রিতে শুরু করুন, কার্ড লাগবে না"}</p>
-        <button onClick={google} className="mt-6 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-input bg-background/40 font-medium hover:bg-accent">
+        <button onClick={google} disabled={busy} className="mt-6 flex min-h-12 w-full items-center justify-center gap-3 rounded-xl border border-input bg-background/40 font-medium hover:bg-accent">
           <svg className="size-5" viewBox="0 0 24 24"><path fill="currentColor" d="M21.35 11.1H12v2.98h5.35c-.23 1.4-1.7 4.1-5.35 4.1-3.22 0-5.85-2.66-5.85-5.95S8.78 6.28 12 6.28c1.83 0 3.06.78 3.76 1.45l2.56-2.47C16.68 3.74 14.55 2.8 12 2.8 6.92 2.8 2.8 6.92 2.8 12s4.12 9.2 9.2 9.2c5.31 0 8.83-3.73 8.83-8.99 0-.6-.07-1.06-.48-1.11z"/></svg>
           গুগল দিয়ে চালিয়ে যান
         </button>
