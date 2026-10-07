@@ -18,21 +18,9 @@ FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on i
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
 const MARK = "<!--HEXA:NEXT-->";
-const OUTLINE_SYS = `You plan a single-page website. Split it into 4-7 build steps (sections), first = header/navigation + hero, last = footer. Output ONLY JSON: {"sections":[{"id":"hero","title":"<short Bangla title>","brief":"<one-line English brief of content>"}]}`;
-const DEFAULT_STEPS: Step[] = [
-  { id: "hero", title: "হেডার ও হিরো", brief: "navigation bar and hero section" },
-  { id: "features", title: "সেবা / বৈশিষ্ট্য", brief: "services or features grid" },
-  { id: "about", title: "আমাদের সম্পর্কে", brief: "about section" },
-  { id: "contact", title: "যোগাযোগ", brief: "contact section with form" },
-  { id: "footer", title: "ফুটার", brief: "footer" },
-];
-function parseSteps(t: string): Step[] {
-  try {
-    const j = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
-    const s = (j.sections ?? []).filter((x: any) => x?.title).slice(0, 7).map((x: any, i: number) => ({ id: String(x.id ?? i), title: String(x.title).slice(0, 40), brief: String(x.brief ?? x.title).slice(0, 200) }));
-    return s.length >= 2 ? s : DEFAULT_STEPS;
-  } catch { return DEFAULT_STEPS; }
-}
+const EFFICIENT = `
+
+EFFICIENCY: Write compact code — use Tailwind CDN utility classes or short shared CSS, no repeated inline styles, no comments, no lorem filler, no inline base64 images, no huge SVG paths (use icon fonts/CDN icons). Keep the whole page well under 25KB.`;
 function cleanFrag(t: string) {
   let s = t.trim();
   const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
@@ -196,8 +184,9 @@ export const Route = createFileRoute("/api/public/generate")({
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
 
-        const { data: libAssets } = await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
-        const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 600 || /^https?:/.test(a.url_or_code))
+        // Asset library: only for new builds, short list of small/URL assets (keeps system prompt small).
+        const { data: libAssets } = project.code_html ? { data: [] as any[] } : await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
+        const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 300 || /^https?:/.test(a.url_or_code)).slice(0, 8)
           .map((a: any) => `- [${a.category}/${a.type}] ${a.name}: ${a.url_or_code}`).join("\n");
         const history = (project.messages as Msg[]) ?? [];
         const isPlan = body.mode === "plan";
@@ -240,7 +229,7 @@ export const Route = createFileRoute("/api/public/generate")({
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
-        const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
+        const recentMsgs = recentHist.filter((m) => m.role === "user").slice(-2).map((m) => ({ role: "user", content: m.content.slice(0, 600) }));
 
         const planMessages = [
           { role: "system", content: (s2.plan_prompt ?? "") + skillCtx + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
@@ -263,7 +252,8 @@ export const Route = createFileRoute("/api/public/generate")({
 
         // Clarifying questions before a new site build (max 3).
         if (body.intent === "ask") {
-          if (isPlan || project.code_html || isReact) return Response.json({ questions: [] });
+          // Detailed prompts or a chosen site type need no questions — saves a whole AI call.
+          if (isPlan || project.code_html || isReact || prompt.trim().split(/\s+/).length >= 12 || (pack && prompt.trim().split(/\s+/).length >= 5)) return Response.json({ questions: [] });
           const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
           for (const p of ordered) {
             try {
@@ -428,7 +418,7 @@ export const Route = createFileRoute("/api/public/generate")({
               const STEP: Record<string, string> = { writing: "ফাইল সেভ হচ্ছে...", installing: "ইনস্টল হচ্ছে... (npm install)", building: "বিল্ড হচ্ছে... (vite build)" };
               let files: { path: string; content: string }[] | null = null;
               let built = ""; let log = ""; let rTokens = 0;
-              for (let attempt = 0; attempt < 3 && !built; attempt++) {
+              for (let attempt = 0; attempt < 2 && !built; attempt++) {
                 send({ t: "progress", step: attempt ? "AI ভুল ঠিক করছে..." : "React কোড লিখছি...", tokens: rTokens });
                 const r = await run(msgs, false);
                 if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
@@ -446,7 +436,7 @@ export const Route = createFileRoute("/api/public/generate")({
                   log = String(out?.log ?? "build failed").slice(-3000);
                 } catch (e: any) { log = String(e?.message ?? e).slice(0, 1000); }
                 await setBuild("failed", log);
-                if (attempt < 2) {
+                if (attempt < 1) {
                   send({ t: "notice", msg: "বিল্ডে সমস্যা — AI নিজে ঠিক করছে..." });
                   msgs.push({ role: "assistant", content: JSON.stringify({ files }).slice(0, 150000) }, { role: "user", content: `npm build FAILED:\n${log}\n\nFix the error. Return the COMPLETE corrected files JSON.` });
                 }
