@@ -26,7 +26,11 @@ PREMIUM QUALITY (TOP PRIORITY — never trade quality for brevity):
 - 6-8 rich sections with real Bangla content depth (no 2-line filler): e.g. services/features with details, stats/numbers, process steps, showcase/gallery, testimonials, FAQ, contact form — vary layouts (grids, split, bento, timeline).
 - Smooth scroll-reveal animations (IntersectionObserver), hover lift/glow on cards and buttons, smooth scrolling, sticky blurred header with mobile menu.
 - Professional typography scale, generous spacing, consistent color system, icons, badges, dividers, styled footer with links.
-- Complete, polished code; no placeholders, no lorem ipsum, no inline base64 images.`;
+- Complete, polished code; no placeholders, no lorem ipsum, no inline base64 images.
+- ANIMATED HERO BACKGROUND (required, never a flat color). Built-in classes are auto-included, do NOT write their CSS:
+  a) Mesh: hero has position:relative;overflow:hidden; first child <div class="hx-mesh" aria-hidden="true"><span></span><span></span></div>; hero content gets position:relative;z-index:1.
+  b) Gradient: add class "hx-gradient" to the hero (or a CTA strip).
+  Set palette on the hero: style="--hx-c1:#..;--hx-c2:#..;--hx-c3:#..;--hx-c4:#.." from the site colors. Keep text readable (add a subtle dark/light overlay if needed). CTA sections may reuse hx-gradient.`;
 function cleanFrag(t: string) {
   let s = t.trim();
   const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
@@ -58,6 +62,7 @@ REACT + VITE PROJECT — STRICT OUTPUT RULE (MUST FOLLOW):
 - Include package.json (scripts.build = "vite build"; deps: react, react-dom; devDeps: vite, @vitejs/plugin-react, typescript, tailwindcss@3, postcss, autoprefixer), vite.config.ts, tailwind.config.js, postcss.config.js, tsconfig.json, index.html, src/main.tsx, src/index.css and all other src files.
 - Complete working code, no placeholders, no TODOs. NEVER output a single HTML file. Do not use react-router (use simple state-based sections or hash links). No images from local paths; use https URLs.
 - Complete, polished, professional UI with animations and rich content; never minimal.
+- Hero background MUST be an animated mesh/gradient (slow drifting blurred radial blobs or background-position shift, 15-25s loops, transform/background only) defined in your own CSS, never a flat color; disable animation under prefers-reduced-motion.
 STYLE INSPIRATION: If the user provides an analyzed website, use its colors, fonts and layout as inspiration but create ORIGINAL content.`;
 
 function parseFiles(text: string): { path: string; content: string }[] | null {

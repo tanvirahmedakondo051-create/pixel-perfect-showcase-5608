@@ -82,6 +82,20 @@ RULES: NEVER use emoji as UI icons. Backgrounds: subtle Haikei-style inline SVG 
 
 const FALLBACK = `<script data-hx-fallback>(function(){document.addEventListener("error",function(e){var t=e.target;if(!t||t.tagName!=="IMG")return;if(t.classList.contains("hx-icon")){t.style.visibility="hidden";return}var d=document.createElement("div");d.setAttribute("role","img");d.setAttribute("aria-label",t.alt||"");d.style.cssText="width:100%;height:100%;min-height:"+(t.offsetHeight||200)+"px;border-radius:inherit;background:linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))";t.replaceWith(d)},true);setTimeout(function(){document.querySelectorAll("lottie-player").forEach(function(l){if(!l.shadowRoot||!l.shadowRoot.querySelector("svg,canvas")){var c=l.closest(".hx-lottie")||l;c.style.display="none"}})},6000);if(matchMedia("(prefers-reduced-motion: reduce)").matches)document.querySelectorAll("lottie-player").forEach(function(l){l.removeAttribute("autoplay");l.removeAttribute("loop")})})();</script>`;
 
+/** Lightweight CSS-only animated backgrounds (Stripe-style mesh + shifting gradient). */
+export const ANIMATED_BG_CSS = `<style data-hx-bg>
+.hx-mesh{position:absolute;inset:0;overflow:hidden;z-index:0;pointer-events:none;isolation:isolate;background:var(--hx-c1,#1e1b4b)}
+.hx-mesh::before,.hx-mesh::after,.hx-mesh>span{content:"";position:absolute;width:60vmax;height:60vmax;border-radius:50%;filter:blur(80px);opacity:.65;will-change:transform;animation:hx-drift 22s ease-in-out infinite alternate}
+.hx-mesh::before{background:radial-gradient(circle,var(--hx-c2,#6366f1),transparent 65%);top:-25%;left:-15%}
+.hx-mesh::after{background:radial-gradient(circle,var(--hx-c3,#22d3ee),transparent 65%);bottom:-30%;right:-15%;animation-duration:26s;animation-direction:alternate-reverse}
+.hx-mesh>span:nth-child(1){background:radial-gradient(circle,var(--hx-c4,#0ea5e9),transparent 65%);top:20%;left:35%;animation-duration:30s}
+.hx-mesh>span:nth-child(2){background:radial-gradient(circle,var(--hx-c2,#6366f1),transparent 65%);bottom:-10%;left:-20%;width:45vmax;height:45vmax;animation-duration:34s;animation-direction:alternate-reverse}
+@keyframes hx-drift{0%{transform:translate(0,0) scale(1)}50%{transform:translate(8%,-6%) scale(1.12)}100%{transform:translate(-6%,8%) scale(.95)}}
+.hx-gradient{background:linear-gradient(120deg,var(--hx-c1,#1e1b4b),var(--hx-c2,#6366f1),var(--hx-c3,#22d3ee),var(--hx-c4,#0ea5e9),var(--hx-c1,#1e1b4b));background-size:300% 300%;animation:hx-shift 18s ease-in-out infinite}
+@keyframes hx-shift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+@media (prefers-reduced-motion:reduce){.hx-mesh::before,.hx-mesh::after,.hx-mesh>span,.hx-gradient{animation:none}}
+</style>`;
+
 /** Inject only the scripts the page uses, lazy-load images, size Unsplash URLs, add graceful fallbacks. */
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
@@ -91,6 +105,7 @@ export function postProcessAssets(html: string) {
   const head: string[] = [];
   if (/<lottie-player/i.test(s) && !/lottie-player\.js/i.test(s)) head.push(`<script defer src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script>`);
   if (/<lord-icon/i.test(s) && !/lordicon\.js/i.test(s)) head.push(`<script defer src="https://cdn.lordicon.com/lordicon.js"></script>`);
+  if (/\bhx-(mesh|gradient)\b/.test(s) && !s.includes("data-hx-bg")) head.push(ANIMATED_BG_CSS);
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
   if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
   return s;
