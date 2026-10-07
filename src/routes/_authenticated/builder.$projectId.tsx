@@ -16,7 +16,9 @@ import { VersionsDialog } from "@/components/app/VersionsDialog";
 import { liveUpdate } from "@/lib/publish.functions";
 import { DomainDialog } from "@/components/app/DomainDialog";
 import { supabase } from "@/integrations/supabase/client";
-import { bn, tokensToday, useProfile, useSession } from "@/lib/auth";
+import { bn, useProfile, useSession } from "@/lib/auth";
+import { CoinIcon, ProgressCard, fmtCoins, fmtDuration, type Progress as Prog } from "@/components/app/Coins";
+import { useSiteSettings } from "@/lib/site";
 import { listActiveProviders, setPublished } from "@/lib/user.functions";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -114,8 +116,15 @@ function Builder() {
   const canDownload = plan?.can_download !== false;
   const canCode = plan?.can_view_code !== false;
   const limit = plan?.tokens_per_day ?? 50000;
-  const used = usedOverride ?? tokensToday(profile);
-  const pct = Math.min(100, (used / limit) * 100);
+  const { data: ss } = useSiteSettings();
+  const tpc = Math.max(1, (ss as any)?.tokens_per_coin ?? 10000);
+  const coins = usedOverride ?? Number((profile as any)?.coins ?? 0);
+  const cap = (plan as any)?.coin_cap ?? 15;
+  const pct = Math.min(100, (coins / Math.max(cap, coins, 1)) * 100);
+  const [prog, setProg] = useState<Prog | null>(null);
+  const [doneSum, setDoneSum] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const outMsg = "🪙 কয়েন শেষ! কাল আবার পাবেন, অথবা আপগ্রেড করুন";
 
   const autosize = () => {};
 
@@ -124,7 +133,7 @@ function Builder() {
     const prompt = (text ?? input).trim();
     if ((!prompt && !atts.length) || streaming || uploading) return;
     const files = atts;
-    if (used >= limit) return toast.error("আজকের টোকেন শেষ! আগামীকাল আবার চেষ্টা করুন অথবা Pro নিন।");
+    if (coins <= 0) return toast.error(outMsg, { action: { label: "প্ল্যান দেখুন", onClick: () => { window.location.href = "/pricing"; } } });
     setInput("");
     setTimeout(autosize);
     setAtts([]);
@@ -132,14 +141,21 @@ function Builder() {
     setMessages((m) => [...m, { role: "user", content: text0, mode: m0, files: files.map((f) => ({ name: f.name, url: f.url, type: f.type })) }]);
     setStreaming(true);
     setLive("");
+    setDoneSum(null);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    const t0 = Date.now();
+    setProg({ step: "পাঠানো হচ্ছে...", tokens: 0, start: t0, last: t0 });
     try {
       const res = await fetch("/api/public/generate", {
         method: "POST",
+        signal: ac.signal,
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
+        if (j.error === "COINS_OUT") j.error = outMsg;
         toast.error(j.error);
         setMessages((m) => [...m, { role: "assistant", content: j.error }]);
         return;
@@ -157,7 +173,9 @@ function Builder() {
         for (const l of lines) {
           if (!l.trim()) continue;
           const ev = JSON.parse(l);
+          if (ev.t === "progress") { setProg((p) => p && { ...p, step: ev.step, tokens: ev.tokens, last: Date.now() }); continue; }
           if (ev.t === "delta") {
+            setProg((p) => p && (Date.now() - p.last > 2000 ? { ...p, last: Date.now() } : p));
             acc += ev.c;
             setLive(acc);
           } else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
@@ -167,7 +185,9 @@ function Builder() {
               setHtml(ev.html);
               setMobilePreview(true);
             }
-            setUsedOverride(ev.used);
+            if (typeof ev.balance === "number") setUsedOverride(ev.balance);
+            setDoneSum(`✅ ${fmtDuration(ev.ms ?? Date.now() - t0)}-তে শেষ • ${bn(ev.tokens)} টোকেন (${fmtCoins(ev.coins ?? ev.tokens / tpc)} কয়েন)`);
+            qc.invalidateQueries({ queryKey: ["profile"] });
             if (ev.savedPct) { setLastSaved(ev.savedPct); toast.success(`${bn(ev.savedPct)}% টোকেন সেভ 🎉`); }
             if (m0 === "plan") {
               setMessages((m) => [...m, { role: "assistant", content: ev.plan || "", mode: "plan" }]);
@@ -181,8 +201,11 @@ function Builder() {
         }
       }
     } catch {
-      toast.error("সংযোগে সমস্যা হয়েছে, আবার চেষ্টা করুন");
+      if (ac.signal.aborted) { toast.info("বাতিল করা হয়েছে"); setMessages((m) => [...m, { role: "assistant", content: "বাতিল করা হয়েছে" }]); }
+      else toast.error("সংযোগে সমস্যা হয়েছে, আবার চেষ্টা করুন");
     } finally {
+      setProg(null);
+      abortRef.current = null;
       setStreaming(false);
       setLive("");
       taRef.current?.focus();
@@ -388,10 +411,10 @@ function Builder() {
             </button>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
-                <span className="flex min-w-0 items-center gap-1 truncate"><Zap className="size-3 shrink-0 text-cyan" />{bn(used)}/{bn(limit)}</span>
-                {mode === "plan" ? <span className="shrink-0 text-cyan">প্ল্যান মোড</span> : lastSaved > 0 ? <span className="shrink-0 text-success">{bn(lastSaved)}% সেভ</span> : pct >= 90 ? <Link to="/pricing" className="shrink-0 text-cyan">Pro নিন</Link> : null}
+                <span className="flex min-w-0 items-center gap-1 truncate"><CoinIcon className="size-3.5 shrink-0" />{fmtCoins(coins)} কয়েন</span>
+                {mode === "plan" ? <span className="shrink-0 text-cyan">প্ল্যান মোড</span> : lastSaved > 0 ? <span className="shrink-0 text-success">{bn(lastSaved)}% সেভ</span> : coins < 2 ? <Link to="/pricing" className="shrink-0 text-cyan">কয়েন নিন</Link> : null}
               </div>
-              <Progress value={pct} className={`mt-1 h-1 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
+              <Progress value={pct} className={`mt-1 h-1 ${coins < 2 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
             </div>
           </div>
           <div className="min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4">
@@ -443,10 +466,10 @@ function Builder() {
                 )}
               </div>
             ))}
-            {streaming && (
-              <div className="flex w-fit items-center gap-2 rounded-2xl rounded-bl-sm bg-muted px-4 py-3 text-sm">
-                <Loader2 className="size-4 animate-spin text-cyan" /> লিখছে...
-              </div>
+            {streaming && prog && <ProgressCard p={prog} tpc={tpc} onCancel={() => abortRef.current?.abort()} />}
+            {!streaming && doneSum && <p className="text-xs text-success">{doneSum}</p>}
+            {!streaming && coins <= 0 && (
+              <div className="rounded-xl border border-destructive/50 bg-destructive/10 p-3 text-sm">{outMsg} <Link to="/pricing" className="font-semibold text-cyan">প্ল্যান দেখুন</Link></div>
             )}
             <div ref={endRef} />
           </div>
