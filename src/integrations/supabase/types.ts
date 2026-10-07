@@ -154,6 +154,73 @@ export type Database = {
           },
         ]
       }
+      backend_rows: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          owner_id: string | null
+          project_id: string
+          table_name: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          id?: string
+          owner_id?: string | null
+          project_id: string
+          table_name: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          owner_id?: string | null
+          project_id?: string
+          table_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backend_rows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      backend_tables: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          schema_json: Json
+          table_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          schema_json?: Json
+          table_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          schema_json?: Json
+          table_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backend_tables_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_summaries: {
         Row: {
           created_at: string
@@ -540,6 +607,9 @@ export type Database = {
       }
       projects: {
         Row: {
+          backend_enabled: boolean
+          build_log: string
+          build_status: string
           changes_since_publish: number
           code_html: string
           created_at: string
@@ -551,6 +621,7 @@ export type Database = {
           domain_checked_at: string | null
           domain_found_ns: string[]
           domain_status: string
+          files: Json
           flag_reason: string | null
           github_repo: string | null
           id: string
@@ -558,6 +629,7 @@ export type Database = {
           is_published: boolean
           messages: Json
           name: string
+          project_type: string
           published_code_hash: string | null
           published_html: string | null
           published_version: number
@@ -568,6 +640,9 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          backend_enabled?: boolean
+          build_log?: string
+          build_status?: string
           changes_since_publish?: number
           code_html?: string
           created_at?: string
@@ -579,6 +654,7 @@ export type Database = {
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string
+          files?: Json
           flag_reason?: string | null
           github_repo?: string | null
           id?: string
@@ -586,6 +662,7 @@ export type Database = {
           is_published?: boolean
           messages?: Json
           name?: string
+          project_type?: string
           published_code_hash?: string | null
           published_html?: string | null
           published_version?: number
@@ -596,6 +673,9 @@ export type Database = {
           user_id: string
         }
         Update: {
+          backend_enabled?: boolean
+          build_log?: string
+          build_status?: string
           changes_since_publish?: number
           code_html?: string
           created_at?: string
@@ -607,6 +687,7 @@ export type Database = {
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string
+          files?: Json
           flag_reason?: string | null
           github_repo?: string | null
           id?: string
@@ -614,6 +695,7 @@ export type Database = {
           is_published?: boolean
           messages?: Json
           name?: string
+          project_type?: string
           published_code_hash?: string | null
           published_html?: string | null
           published_version?: number
@@ -641,6 +723,9 @@ export type Database = {
           announcement_color: string
           announcement_text: string
           aurapay_enabled: boolean
+          backend_master_url: string
+          backend_max_rows: number
+          backend_max_tables: number
           build_prompt: string
           delete_after_days: number
           free_block_publish: boolean
@@ -675,6 +760,9 @@ export type Database = {
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
+          backend_master_url?: string
+          backend_max_rows?: number
+          backend_max_tables?: number
           build_prompt?: string
           delete_after_days?: number
           free_block_publish?: boolean
@@ -709,6 +797,9 @@ export type Database = {
           announcement_color?: string
           announcement_text?: string
           aurapay_enabled?: boolean
+          backend_master_url?: string
+          backend_max_rows?: number
+          backend_max_tables?: number
           build_prompt?: string
           delete_after_days?: number
           free_block_publish?: boolean
@@ -737,6 +828,41 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      site_users: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          password_hash: string
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name?: string
+          password_hash: string
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          password_hash?: string
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_users_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       skill_packs: {
         Row: {

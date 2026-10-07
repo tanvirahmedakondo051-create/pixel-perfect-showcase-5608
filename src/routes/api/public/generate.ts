@@ -57,6 +57,29 @@ STYLE INSPIRATION: If the user provides an analyzed website (colors, fonts, layo
 
 ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.`;
 
+const REACT_RULE = `
+
+REACT + VITE PROJECT — STRICT OUTPUT RULE (MUST FOLLOW):
+- Output a JSON object with files array: {"files": [{"path": "src/App.tsx", "content": "..."}]}. Output ONLY this JSON, no markdown fences, no explanation.
+- Include package.json (scripts.build = "vite build"; deps: react, react-dom; devDeps: vite, @vitejs/plugin-react, typescript, tailwindcss@3, postcss, autoprefixer), vite.config.ts, tailwind.config.js, postcss.config.js, tsconfig.json, index.html, src/main.tsx, src/index.css and all other src files.
+- Complete working code, no placeholders, no TODOs. NEVER output a single HTML file. Do not use react-router (use simple state-based sections or hash links). No images from local paths; use https URLs.
+- Keep the total output compact (prefer fewer, well-organized files).
+STYLE INSPIRATION: If the user provides an analyzed website, use its colors, fonts and layout as inspiration but create ORIGINAL content.`;
+
+function parseFiles(text: string): { path: string; content: string }[] | null {
+  let t = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/, "");
+  const a = t.indexOf("{"), b = t.lastIndexOf("}");
+  if (a < 0 || b < a) return null;
+  try {
+    const j = JSON.parse(t.slice(a, b + 1));
+    const files = (Array.isArray(j) ? j : j.files) as any[];
+    if (!Array.isArray(files)) return null;
+    const out = files.filter((f) => f && typeof f.path === "string" && typeof f.content === "string" && !f.path.includes("..") && !f.path.startsWith("/"))
+      .slice(0, 150).map((f) => ({ path: f.path.replace(/^\.\//, ""), content: f.content }));
+    return out.some((f) => f.path === "package.json") && out.some((f) => f.path === "index.html") ? out : null;
+  } catch { return null; }
+}
+
 function findHtmlInJson(v: any): string | null {
   if (typeof v === "string") return /<html|<!doctype/i.test(v) ? v : null;
   if (Array.isArray(v)) {
@@ -210,7 +233,11 @@ export const Route = createFileRoute("/api/public/generate")({
           const files = ((analysis.file_map_json as any[]) ?? []).slice(0, 60).map((f) => `- ${f.path} (${f.role})`).join("\n");
           skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;
         }
-        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
+        const isReact = (project as any).project_type === "react";
+        const { backendContext, injectBackend } = await import("@/lib/backend.server");
+        const { appOrigin } = await import("@/lib/origin.server");
+        const beCtx = (project as any).backend_enabled ? await backendContext(db, project.id, isReact) : "";
+        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
@@ -236,7 +263,7 @@ export const Route = createFileRoute("/api/public/generate")({
 
         // Clarifying questions before a new site build (max 3).
         if (body.intent === "ask") {
-          if (isPlan || project.code_html) return Response.json({ questions: [] });
+          if (isPlan || project.code_html || isReact) return Response.json({ questions: [] });
           const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
           for (const p of ordered) {
             try {
@@ -385,6 +412,59 @@ export const Route = createFileRoute("/api/public/generate")({
               return controller.close();
             }
 
+            // ---- React + Vite project: AI writes files, VPS agent builds them, result is inlined into one HTML ----
+            if (isReact) {
+              const { getAgent, agentCall } = await import("@/lib/deploy.server");
+              const agent = await getAgent(db);
+              if (!agent) { send({ t: "error", msg: "React বিল্ড সার্ভার এখনো সেটআপ হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।" }); return controller.close(); }
+              const cur: { path: string; content: string }[] = ((project as any).files as any[]) ?? [];
+              const sys = (s2.build_prompt || settings.system_prompt || "") + skillCtx + REACT_RULE + beCtx;
+              const curText = cur.map((f) => `--- ${f.path}\n${f.content}`).join("\n\n");
+              const msgs: any[] = [
+                { role: "system", content: sys }, ...summaryMsg, ...recentMsgs,
+                { role: "user", content: withExtra(cur.length ? `Current project files:\n${curText.slice(0, 150000)}\n\nChange request: ${prompt}\n\nReturn the COMPLETE files JSON (all files).` : prompt) },
+              ];
+              const setBuild = (build_status: string, build_log = "") => db.from("projects").update({ build_status, build_log } as any).eq("id", project.id);
+              const STEP: Record<string, string> = { writing: "ফাইল সেভ হচ্ছে...", installing: "ইনস্টল হচ্ছে... (npm install)", building: "বিল্ড হচ্ছে... (vite build)" };
+              let files: { path: string; content: string }[] | null = null;
+              let built = ""; let log = ""; let rTokens = 0;
+              for (let attempt = 0; attempt < 3 && !built; attempt++) {
+                send({ t: "progress", step: attempt ? "AI ভুল ঠিক করছে..." : "React কোড লিখছি...", tokens: rTokens });
+                const r = await run(msgs, false);
+                if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
+                rTokens += r.tokens; baseTokens = rTokens;
+                await charge(r.tokens, 0, "React সাইট: " + prompt.slice(0, 50));
+                const parsed = parseFiles(r.full);
+                if (!parsed) { msgs.push({ role: "assistant", content: r.full.slice(0, 2000) }, { role: "user", content: 'Your output was not valid JSON. Output ONLY {"files":[{"path":"...","content":"..."}]} with all files.' }); log = "AI সঠিক ফাইল দেয়নি"; continue; }
+                files = parsed;
+                send({ t: "files", files: files.map((f) => f.path) });
+                try {
+                  const out: any = await agentCall(agent, "/build", { projectId: project.id, files }, async (st) => {
+                    if (STEP[st.step]) { send({ t: "progress", step: STEP[st.step], tokens: rTokens }); await setBuild(st.step); }
+                  }, 300_000);
+                  if (out?.step === "ready" && out.html) { built = out.html; break; }
+                  log = String(out?.log ?? "build failed").slice(-3000);
+                } catch (e: any) { log = String(e?.message ?? e).slice(0, 1000); }
+                await setBuild("failed", log);
+                if (attempt < 2) {
+                  send({ t: "notice", msg: "বিল্ডে সমস্যা — AI নিজে ঠিক করছে..." });
+                  msgs.push({ role: "assistant", content: JSON.stringify({ files }).slice(0, 150000) }, { role: "user", content: `npm build FAILED:\n${log}\n\nFix the error. Return the COMPLETE corrected files JSON.` });
+                }
+              }
+              if (built && (project as any).backend_enabled) built = injectBackend(built, appOrigin(), project.id);
+              const now = new Date().toISOString();
+              const am: Msg = { role: "assistant", content: built ? "✅ React সাইট বিল্ড হয়েছে — রেডি" : `❌ বিল্ড হয়নি। শেষ ত্রুটি:\n${log.slice(-600)}`, at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: r2(chargedCoins), title: prompt.slice(0, 50), kind: built ? undefined : "build-error" };
+              const newMsgs: Msg[] = [...history, userMsg(), am];
+              const update: any = { messages: newMsgs, build_status: built ? "ready" : "failed", build_log: built ? "" : log };
+              if (files) update.files = files;
+              if (built) { update.code_html = built; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
+              if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);
+              await db.from("projects").update(update).eq("id", project.id);
+              send({ t: "done", tokens: rTokens, html: built, msg: am, used, limit, coins: r2(chargedCoins), balance: Math.max(0, coinsLeft), ms: am.ms });
+              await finishSummary(newMsgs);
+              return controller.close();
+            }
+
             let html = "";
             let tokens = 0;
             let saved = 0;
@@ -501,6 +581,7 @@ export const Route = createFileRoute("/api/public/generate")({
             const am: Msg = { role: "assistant", content: html ? (resumeCp ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
             const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
+            if (html && (project as any).backend_enabled) html = injectBackend(html, appOrigin(), project.id);
             if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
             if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);

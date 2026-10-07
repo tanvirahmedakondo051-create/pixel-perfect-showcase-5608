@@ -12,7 +12,10 @@ if ! command -v node >/dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
 fi
-mkdir -p /opt/hexa-agent /var/www/sites /var/www/certbot
+mkdir -p /opt/hexa-agent /var/www/sites /var/www/certbot /var/hexa/projects
+# Unprivileged user for React builds (AI-generated code never runs as root)
+id hexabuild >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin hexabuild
+chown -R hexabuild:hexabuild /var/hexa/projects
 if [ -n "$APP_URL" ]; then curl -fsSL "$APP_URL/deploy-agent.js" -o /opt/hexa-agent/deploy-agent.js; fi
 [ -f /opt/hexa-agent/deploy-agent.js ] || { echo "Set HEXA_APP_URL so the agent can be downloaded"; exit 1; }
 
@@ -32,6 +35,8 @@ Environment=HEXA_TOKEN=$TOKEN
 Environment=HEXA_AGENT_HOST=$AGENT_HOST
 Environment=HEXA_PORT=$PORT
 Environment=HEXA_EMAIL=$EMAIL
+Environment=HEXA_BUILD_UID=$(id -u hexabuild)
+Environment=HEXA_BUILD_GID=$(id -g hexabuild)
 ExecStart=/usr/bin/node /opt/hexa-agent/deploy-agent.js
 Restart=always
 [Install]
