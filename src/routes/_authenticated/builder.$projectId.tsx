@@ -27,6 +27,8 @@ import { PREVIEW_MS } from "@/lib/hosting";
 import { BackendDialog, FilesDialog } from "@/components/app/BackendDialog";
 import { setupBackend, setProjectType } from "@/lib/backend.functions";
 import { Database, FolderTree } from "lucide-react";
+import { getJob, cancelJob, activeJob } from "@/lib/jobs.functions";
+import { PlanDialog } from "@/components/app/PlanDialog";
 
 const BE_RE = /লগইন|লগ ইন|সাইন ?আপ|ডেটাবেস|ডাটাবেস|সেভ|অর্ডার|বুকিং|রেজিস্ট্রেশন|ফর্ম জমা|login|sign ?up|database|save|register|booking/i;
 
@@ -49,6 +51,10 @@ function Builder() {
   const fetchProviders = useServerFn(listActiveProviders);
   const publish = useServerFn(setPublished);
   const doLive = useServerFn(liveUpdate);
+  const pollJob = useServerFn(getJob);
+  const stopJob = useServerFn(cancelJob);
+  const findActive = useServerFn(activeJob);
+  const [planView, setPlanView] = useState<string | null>(null);
   useEffect(() => {
     const ch = supabase.channel(`project-${projectId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "projects", filter: `id=eq.${projectId}` }, () => qc.invalidateQueries({ queryKey: ["project", projectId] }))
@@ -196,6 +202,64 @@ function Builder() {
     else { pendingRef.current = null; exec(p.prompt, p.mode, p.files); }
   };
 
+  // Follow a background job: poll every 3s and replay its events. The job keeps running on the server even if this tab closes.
+  const followJob = async (jobId: string, m0: "plan" | "build", resumeId: string | undefined, t0: number, ac: AbortController) => {
+    let after = 0;
+    let acc = "";
+    let lastEvent = Date.now();
+    const handle = (ev: any) => {
+      if (ev.t === "progress") {
+        setProg((p) => p && { ...p, step: ev.step, tokens: ev.tokens, last: Date.now() });
+        if (ev.steps) { setSteps(ev.steps); setStepIdx(ev.stepIndex ?? 0); }
+        return;
+      }
+      if (ev.t === "delta") { acc += ev.c; setLive(acc); }
+      else if (ev.t === "checkpoint") { if (ev.html) setHtml(ev.html); setStepIdx(ev.done); acc = ""; setLive(""); }
+      else if (ev.t === "paused") {
+        if (ev.html) setHtml(ev.html);
+        if (typeof ev.balance === "number") setUsedOverride(ev.balance);
+        setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), ev.msg]);
+        if (ev.error) toast.error(ev.error); else toast.info("⏸️ কয়েন শেষ — কাজ থামানো হয়েছে, চেকপয়েন্ট সেভ আছে");
+        qc.invalidateQueries({ queryKey: ["profile"] });
+      }
+      else if (ev.t === "files") toast.info(`📁 ${bn(ev.files.length)}টি ফাইল তৈরি হয়েছে — বিল্ড শুরু`);
+      else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
+      else if (ev.t === "error") toast.error(ev.msg === "COINS_OUT" ? outMsg : ev.msg);
+      else if (ev.t === "done") {
+        if (ev.html) { setHtml(ev.html); setMobilePreview(true); }
+        if (typeof ev.balance === "number") setUsedOverride(ev.balance);
+        setDoneSum(`✅ ${fmtDuration(ev.ms ?? Date.now() - t0)}-তে শেষ • ${bn(ev.tokens)} টোকেন (${fmtCoins(ev.coins ?? ev.tokens / tpc)} কয়েন)`);
+        qc.invalidateQueries({ queryKey: ["profile"] });
+        if (ev.savedPct) { setLastSaved(ev.savedPct); toast.success(`${bn(ev.savedPct)}% টোকেন সেভ 🎉`); }
+        const fallback: Msg = m0 === "plan" ? { role: "assistant", content: ev.plan || "", mode: "plan" } : { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" };
+        const msg = ev.msg ?? fallback;
+        setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), msg]);
+        if (m0 === "plan" && msg.content) setPlanView(msg.content);
+        else toast.success("সেভ হয়েছে ✓");
+        qc.invalidateQueries({ queryKey: ["project", projectId] });
+        qc.invalidateQueries({ queryKey: ["projects"] });
+      }
+    };
+    while (true) {
+      if (ac.signal.aborted) {
+        await stopJob({ data: { jobId } }).catch(() => null);
+        toast.info("বাতিল করা হচ্ছে — চলমান অংশ শেষে থামবে");
+        qc.invalidateQueries({ queryKey: ["project", projectId] });
+        return;
+      }
+      try {
+        const r = await pollJob({ data: { jobId, after } });
+        if (r.events.length) {
+          lastEvent = Date.now();
+          r.events.forEach(handle);
+          after = r.total;
+        } else setProg((p) => p && (Date.now() - lastEvent < 25000 ? { ...p, last: Date.now() } : p));
+        if (!["queued", "running"].includes(r.status)) return;
+      } catch { /* network blip — keep polling */ }
+      await new Promise<void>((res) => { const t = setTimeout(res, 3000); ac.signal.addEventListener("abort", () => { clearTimeout(t); res(); }, { once: true }); });
+    }
+  };
+
   const exec = async (text0: string, m0: "plan" | "build", files: Att[], resumeId?: string) => {
     if (streaming) return;
     if (resumeId && coins <= 0) return toast.error(outMsg);
@@ -211,70 +275,21 @@ function Builder() {
     try {
       const res = await fetch("/api/public/generate", {
         method: "POST",
-        signal: ac.signal,
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files, resumeId: resumeId ?? null }),
       });
-      if (!res.ok || !res.body) {
-        const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
+      const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
+      if (!res.ok || !j.jobId) {
         if (j.error === "COINS_OUT") j.error = outMsg;
-        toast.error(j.error);
-        setMessages((m) => [...m, { role: "assistant", content: j.error, at: new Date().toISOString() }]);
+        toast.error(j.error ?? "কিছু একটা সমস্যা হয়েছে");
+        setMessages((m) => [...m, { role: "assistant", content: j.error ?? "কিছু একটা সমস্যা হয়েছে", at: new Date().toISOString() }]);
         return;
       }
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      let acc = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        const lines = buf.split("\n");
-        buf = lines.pop() ?? "";
-        for (const l of lines) {
-          if (!l.trim()) continue;
-          const ev = JSON.parse(l);
-          if (ev.t === "progress") {
-            setProg((p) => p && { ...p, step: ev.step, tokens: ev.tokens, last: Date.now() });
-            if (ev.steps) { setSteps(ev.steps); setStepIdx(ev.stepIndex ?? 0); }
-            continue;
-          }
-          if (ev.t === "delta") {
-            setProg((p) => p && (Date.now() - p.last > 2000 ? { ...p, last: Date.now() } : p));
-            acc += ev.c;
-            setLive(acc);
-          } else if (ev.t === "checkpoint") { if (ev.html) setHtml(ev.html); setStepIdx(ev.done); acc = ""; setLive(""); }
-          else if (ev.t === "paused") {
-            if (ev.html) setHtml(ev.html);
-            if (typeof ev.balance === "number") setUsedOverride(ev.balance);
-            setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), ev.msg]);
-            if (ev.error) toast.error(ev.error); else toast.info("⏸️ কয়েন শেষ — কাজ থামানো হয়েছে, চেকপয়েন্ট সেভ আছে");
-            qc.invalidateQueries({ queryKey: ["profile"] });
-          }
-          else if (ev.t === "files") toast.info(`📁 ${bn(ev.files.length)}টি ফাইল তৈরি হয়েছে — বিল্ড শুরু`);
-          else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
-          else if (ev.t === "error") toast.error(ev.msg);
-          else if (ev.t === "done") {
-            if (ev.html) {
-              setHtml(ev.html);
-              setMobilePreview(true);
-            }
-            if (typeof ev.balance === "number") setUsedOverride(ev.balance);
-            setDoneSum(`✅ ${fmtDuration(ev.ms ?? Date.now() - t0)}-তে শেষ • ${bn(ev.tokens)} টোকেন (${fmtCoins(ev.coins ?? ev.tokens / tpc)} কয়েন)`);
-            qc.invalidateQueries({ queryKey: ["profile"] });
-            if (ev.savedPct) { setLastSaved(ev.savedPct); toast.success(`${bn(ev.savedPct)}% টোকেন সেভ 🎉`); }
-            const fallback: Msg = m0 === "plan" ? { role: "assistant", content: ev.plan || "", mode: "plan" } : { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" };
-            setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), ev.msg ?? fallback]);
-            if (m0 !== "plan") toast.success("সেভ হয়েছে ✓");
-            qc.invalidateQueries({ queryKey: ["project", projectId] });
-            qc.invalidateQueries({ queryKey: ["projects"] });
-          }
-        }
-      }
+      if (j.existing) toast.info("আগের কাজটি এখনো চলছে — সেটা দেখাচ্ছি");
+      setProg((p) => p && { ...p, step: "সার্ভারে কাজ শুরু হয়েছে — ট্যাব বন্ধ করলেও চলবে", last: Date.now() });
+      await followJob(j.jobId, m0, resumeId, t0, ac);
     } catch {
-      if (ac.signal.aborted) { toast.info("বাতিল করা হয়েছে"); setMessages((m) => [...m, { role: "assistant", content: "বাতিল করা হয়েছে", at: new Date().toISOString() }]); }
-      else toast.error("সংযোগে সমস্যা হয়েছে, আবার চেষ্টা করুন");
+      toast.error("সংযোগে সমস্যা হয়েছে, আবার চেষ্টা করুন");
     } finally {
       setProg(null);
       abortRef.current = null;
@@ -283,6 +298,23 @@ function Builder() {
       taRef.current?.focus();
     }
   };
+
+  // Reopening the builder while a job runs: pick up its progress.
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current || !session) return;
+    resumedRef.current = true;
+    findActive({ data: { projectId } }).then(async (j) => {
+      if (!j || abortRef.current) return;
+      const ac = new AbortController();
+      abortRef.current = ac;
+      const t0 = new Date(j.createdAt).getTime();
+      setStreaming(true);
+      setProg({ step: "আগের কাজ চলছে...", tokens: 0, start: t0, last: Date.now() });
+      try { await followJob(j.id, j.mode as "plan" | "build", undefined, t0, ac); }
+      finally { setProg(null); abortRef.current = null; setStreaming(false); setLive(""); qc.invalidateQueries({ queryKey: ["project", projectId] }); }
+    }).catch(() => null);
+  }, [session, projectId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onFiles = async (list: FileList | null) => {
     if (!list?.length) return;
@@ -552,6 +584,7 @@ function Builder() {
                           ))}
                         </div>
                       )}
+                      <button onClick={() => setPlanView(m.content)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm"><FileText className="size-4" /> প্ল্যান খুলুন</button>
                       {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
                         <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
                       )}
@@ -659,6 +692,12 @@ function Builder() {
           <BackendDialog open={beOpen} onOpenChange={setBeOpen} projectId={projectId} onChanged={() => { qc.invalidateQueries({ queryKey: ["project", projectId] }); qc.invalidateQueries({ queryKey: ["profile"] }); }} />
           <FilesDialog open={filesOpen} onOpenChange={setFilesOpen} files={((project as any)?.files as any[]) ?? []} />
           <CheckpointsDialog open={cpOpen} onOpenChange={setCpOpen} projectId={projectId} onRollback={(h) => { setHtml(h); qc.invalidateQueries({ queryKey: ["project", projectId] }); }} />
+          <PlanDialog
+            plan={planView}
+            onClose={() => setPlanView(null)}
+            onApprove={() => { const p = planView; setPlanView(null); if (p) approvePlan(p); }}
+            onChange={() => { setPlanView(null); setMode("plan"); taRef.current?.focus(); }}
+          />
           <Dialog open={skillOpen} onOpenChange={setSkillOpen}>
             <DialogContent><DialogHeader><DialogTitle>সাইটের ধরন বেছে নিন</DialogTitle></DialogHeader><SkillGrid /></DialogContent>
           </Dialog>

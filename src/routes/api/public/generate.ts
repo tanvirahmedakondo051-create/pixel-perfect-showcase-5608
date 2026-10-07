@@ -13,7 +13,7 @@ const Body = z.object({
 
 const PLAN_FORMAT = `
 
-FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on its own line as [[option text]]. Never output HTML or code.`;
+FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]].`;
 
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
@@ -139,19 +139,43 @@ export const Route = createFileRoute("/api/public/generate")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-        if (!token) return json(401, "লগইন করুন");
         const { supabaseAdmin: db } = await import("@/integrations/supabase/client.server");
-        const { data: u } = await db.auth.getUser(token);
-        const user = u?.user;
-        if (!user) return json(401, "লগইন সেশন শেষ, আবার লগইন করুন");
-
+        // Two callers: the browser (creates a background job) or the database job runner (runs it, no browser needed).
+        const jobId = request.headers.get("x-hexa-job");
+        let job: any = null;
+        let user: any = null;
         let body: z.infer<typeof Body>;
-        try {
-          body = Body.parse(await request.json());
-        } catch {
-          return json(400, "অনুরোধটি সঠিক নয়");
+        if (jobId) {
+          const { data: sec } = await db.from("app_secrets").select("value").eq("name", "job_token").maybeSingle();
+          const { createHmac, timingSafeEqual } = await import("node:crypto");
+          const exp = Buffer.from(createHmac("sha256", sec?.value ?? "").update(jobId).digest("hex"));
+          const got = Buffer.from(request.headers.get("x-hexa-sig") ?? "");
+          if (!sec?.value || exp.length !== got.length || !timingSafeEqual(exp, got)) return json(401, "unauthorized");
+          const { data: j } = await db.from("generation_jobs").select("*").eq("id", jobId).maybeSingle();
+          if (!j || !["running", "queued"].includes(j.status)) return json(409, "job not active");
+          job = j;
+          const { data: au } = await db.auth.admin.getUserById(j.user_id);
+          user = au?.user;
+          if (!user) return json(404, "no user");
+          try { body = Body.parse(j.input); } catch { await db.rpc("job_push" as any, { _id: jobId, _events: [{ t: "error", msg: "অনুরোধটি সঠিক নয়" }], _status: "error" } as any); return json(400, "bad input"); }
+        } else {
+          const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+          if (!token) return json(401, "লগইন করুন");
+          const { data: u } = await db.auth.getUser(token);
+          user = u?.user;
+          if (!user) return json(401, "লগইন সেশন শেষ, আবার লগইন করুন");
+          try {
+            body = Body.parse(await request.json());
+          } catch {
+            return json(400, "অনুরোধটি সঠিক নয়");
+          }
         }
+        const failJob = async (status: number, msg: string) => {
+          if (job) await db.rpc("job_push" as any, { _id: job.id, _events: [{ t: "error", msg: msg === "COINS_OUT" ? "🪙 কয়েন শেষ!" : msg }], _status: "error" } as any);
+          return json(status, msg);
+        };
+        const ac = new AbortController();
+        const sig = AbortSignal.any([request.signal, ac.signal]);
 
         const { effectivePlan, allowedProviders } = await import("@/lib/plan.server");
         const [profile, { data: settings }, { data: project }] = await Promise.all([
@@ -159,19 +183,19 @@ export const Route = createFileRoute("/api/public/generate")({
           db.from("site_settings").select("*").eq("id", 1).single(),
           db.from("projects").select("*").eq("id", body.projectId).single(),
         ]);
-        if (!profile || !settings) return json(500, "সার্ভারে সমস্যা হয়েছে");
-        if (!project || project.user_id !== user.id) return json(404, "প্রজেক্ট পাওয়া যায়নি");
-        if (profile.is_banned) return json(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
+        if (!profile || !settings) return failJob(500, "সার্ভারে সমস্যা হয়েছে");
+        if (!project || project.user_id !== user.id) return failJob(404, "প্রজেক্ট পাওয়া যায়নি");
+        if (profile.is_banned) return failJob(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
         let resumeCp: any = null;
         if (body.resumeId) {
           const { data } = await db.from("task_checkpoints" as any).select("*").eq("id", body.resumeId).maybeSingle();
-          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return json(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
+          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return failJob(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
           resumeCp = data;
           body.mode = "build";
         }
         const prompt: string = resumeCp ? resumeCp.prompt : body.prompt;
-        if (!prompt.trim()) return json(400, "অনুরোধটি সঠিক নয়");
-        if (settings.require_email_verify && !user.email_confirmed_at) return json(403, "আগে ইমেইল ভেরিফাই করুন");
+        if (!prompt.trim()) return failJob(400, "অনুরোধটি সঠিক নয়");
+        if (settings.require_email_verify && !user.email_confirmed_at) return failJob(403, "আগে ইমেইল ভেরিফাই করুন");
 
         const today = dhakaToday();
         let used = profile.tokens_used_today;
@@ -182,18 +206,32 @@ export const Route = createFileRoute("/api/public/generate")({
         const limit = (profile.plans as any)?.tokens_per_day ?? 50000;
         const tpc = Math.max(1, (settings as any).tokens_per_coin ?? 10000);
         const coinsBefore = Number((profile as any).coins ?? 0);
-        if (coinsBefore <= 0) return json(402, "COINS_OUT");
+        if (coinsBefore <= 0) return failJob(402, "COINS_OUT");
         const startedAt = Date.now();
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if (!job && !resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return failJob(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
         const providers = await allowedProviders(db, profile.plans);
-        if (!providers?.length) return json(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
+        if (!providers?.length) return failJob(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
         const ordered = body.providerId
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
+
+        // Browser call: queue a background job and return at once. The database starts the runner, so closing the tab doesn't stop it.
+        if (!job && body.intent !== "ask") {
+          const { data: running } = await db.from("generation_jobs").select("id").eq("project_id", project.id).in("status", ["queued", "running"]).gte("heartbeat_at", new Date(Date.now() - 120_000).toISOString()).limit(1).maybeSingle();
+          if (running) return Response.json({ jobId: running.id, existing: true });
+          const { appOrigin: ao } = await import("@/lib/origin.server");
+          let origin = ao();
+          const pm = origin.match(/^https:\/\/id-preview--([0-9a-f-]{36})\.lovable\.app$/);
+          if (pm) origin = `https://project--${pm[1]}-dev.lovable.app`;
+          const { data: nj, error: je } = await db.from("generation_jobs").insert({ project_id: project.id, user_id: user.id, mode: body.mode, input: body as any, origin }).select("id").single();
+          if (je || !nj) return json(500, "সার্ভারে সমস্যা হয়েছে");
+          await db.rpc("kick_job" as any, { _id: nj.id } as any);
+          return Response.json({ jobId: nj.id });
+        }
 
         // Asset library: only for new builds, short list of small/URL assets (keeps system prompt small).
         const { data: libAssets } = project.code_html ? { data: [] as any[] } : await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
@@ -276,7 +314,7 @@ export const Route = createFileRoute("/api/public/generate")({
           for (const p of ordered) {
             try {
               const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
-                method: "POST", signal: request.signal,
+                method: "POST", signal: sig,
                 headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
                 body: JSON.stringify({ model: p.model, stream: false, max_tokens: 600, temperature: 0.3, messages: [{ role: "system", content: sys + skillCtx.slice(0, 1500) }, { role: "user", content: prompt }] }),
               });
@@ -293,15 +331,40 @@ export const Route = createFileRoute("/api/public/generate")({
               try { qs = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)).questions ?? []; } catch { /* none */ }
               const questions = qs.filter((q) => q?.q).slice(0, 3).map((q) => ({ q: String(q.q).slice(0, 200), options: (Array.isArray(q.options) ? q.options : []).slice(0, 4).map((o: any) => String(o).slice(0, 60)) }));
               return Response.json({ questions, coins });
-            } catch { if (request.signal.aborted) break; }
+            } catch { if (sig.aborted) break; }
           }
           return Response.json({ questions: [] });
         }
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
-          async start(controller) {
-            const send = (o: object) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          async start(controller0) {
+            // Inner code "closes" freely; the real close happens after job events are saved.
+            const controller = { enqueue: (c: Uint8Array) => controller0.enqueue(c), close: () => {} };
+            const evq: any[] = [];
+            let finalStatus: string | null = null;
+            let lastFlush = 0;
+            let chain: Promise<unknown> = Promise.resolve();
+            const flushJob = (end = false) => {
+              if (!job) return;
+              lastFlush = Date.now();
+              chain = chain.then(async () => {
+                const evs = evq.splice(0);
+                const { data: st } = await db.rpc("job_push" as any, { _id: job.id, _events: evs, _status: end ? (finalStatus ?? "done") : null } as any);
+                if (st === "cancelled") ac.abort();
+              }).catch((e) => console.error("job_push", e));
+            };
+            const send = (o: any) => {
+              try { controller0.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { /* runner disconnected */ }
+              if (!job || o.t === "delta") return;
+              if (o.t === "done") finalStatus = "done";
+              else if (o.t === "paused") finalStatus = "paused";
+              else if (o.t === "error") finalStatus = finalStatus ?? "error";
+              evq.push(o);
+              if (["done", "paused", "error", "checkpoint", "files"].includes(o.t) || Date.now() - lastFlush > 1500) flushJob();
+            };
+            try {
+            await (async () => {
             let usedProvider: any = null;
             let baseTokens = 0;
             send({ t: "progress", step: "অনুরোধ বিশ্লেষণ করছি...", tokens: 0 });
@@ -315,14 +378,14 @@ export const Route = createFileRoute("/api/public/generate")({
                 try {
                   const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
                     method: "POST",
-                    signal: request.signal,
+                    signal: sig,
                     headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
                     body: JSON.stringify({ model: p.model, messages, stream: true, stream_options: { include_usage: true }, max_tokens: Math.min(p.max_tokens, settings.max_output_tokens), temperature: p.temperature }),
                   });
                   if (r.ok && r.body) { res = r; usedProvider = p; break; }
                   console.error("provider failed", p.name, r.status, (await r.text()).slice(0, 300));
                 } catch (e) {
-                  if (request.signal.aborted) return null;
+                  if (sig.aborted) return null;
                   console.error("provider error", p.name, e);
                 }
               }
@@ -361,7 +424,7 @@ export const Route = createFileRoute("/api/public/generate")({
                   }
                 }
               } catch (e) {
-                if (!request.signal.aborted) console.error("stream read", e);
+                if (!sig.aborted) console.error("stream read", e);
               }
               if (!tokens) tokens = Math.ceil((JSON.stringify(messages).length + full.length) / 4);
               return { full, tokens };
@@ -541,11 +604,11 @@ export const Route = createFileRoute("/api/public/generate")({
                   ], true);
                   if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }
-                if (!r || !partial || request.signal.aborted) {
+                if (!r || !partial || sig.aborted) {
                   if (done.length || resumeCp) {
                     const pm = await savePause();
-                    if (!request.signal.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
-                  } else if (!request.signal.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
+                    if (!sig.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
+                  } else if (!sig.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
                   return controller.close();
                 }
                 tokens += r.tokens; baseTokens = tokens;
@@ -608,6 +671,12 @@ export const Route = createFileRoute("/api/public/generate")({
             send({ t: "done", tokens, html, msg: am, used, limit, saved, savedPct, coins: finalCoins, balance: Math.max(0, coinsLeft), ms: am.ms });
             await finishSummary(newMsgs);
             controller.close();
+            })().catch((e) => { console.error("job run", e); send({ t: "error", msg: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।" }); });
+            } finally {
+              flushJob(true);
+              await chain;
+              controller0.close();
+            }
           },
         });
 
