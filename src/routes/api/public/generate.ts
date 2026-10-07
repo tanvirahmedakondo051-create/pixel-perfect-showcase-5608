@@ -3,9 +3,11 @@ import { z } from "zod";
 
 const Body = z.object({
   projectId: z.string().uuid(),
-  prompt: z.string().min(1).max(8000),
+  prompt: z.string().max(8000).optional().default(""),
   providerId: z.string().uuid().optional().nullable(),
   mode: z.enum(["plan", "build"]).optional().default("build"),
+  intent: z.enum(["run", "ask"]).optional().default("run"),
+  resumeId: z.string().uuid().optional().nullable(),
   attachments: z.array(z.object({ path: z.string().max(200), url: z.string().url().max(400), name: z.string().max(120), type: z.string().max(60) })).max(4).optional().default([]),
 });
 
@@ -13,7 +15,33 @@ const PLAN_FORMAT = `
 
 FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on its own line as [[option text]]. Never output HTML or code.`;
 
-type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build" };
+type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
+type Step = { id: string; title: string; brief: string };
+const MARK = "<!--HEXA:NEXT-->";
+const OUTLINE_SYS = `You plan a single-page website. Split it into 4-7 build steps (sections), first = header/navigation + hero, last = footer. Output ONLY JSON: {"sections":[{"id":"hero","title":"<short Bangla title>","brief":"<one-line English brief of content>"}]}`;
+const DEFAULT_STEPS: Step[] = [
+  { id: "hero", title: "হেডার ও হিরো", brief: "navigation bar and hero section" },
+  { id: "features", title: "সেবা / বৈশিষ্ট্য", brief: "services or features grid" },
+  { id: "about", title: "আমাদের সম্পর্কে", brief: "about section" },
+  { id: "contact", title: "যোগাযোগ", brief: "contact section with form" },
+  { id: "footer", title: "ফুটার", brief: "footer" },
+];
+function parseSteps(t: string): Step[] {
+  try {
+    const j = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
+    const s = (j.sections ?? []).filter((x: any) => x?.title).slice(0, 7).map((x: any, i: number) => ({ id: String(x.id ?? i), title: String(x.title).slice(0, 40), brief: String(x.brief ?? x.title).slice(0, 200) }));
+    return s.length >= 2 ? s : DEFAULT_STEPS;
+  } catch { return DEFAULT_STEPS; }
+}
+function cleanFrag(t: string) {
+  let s = t.trim();
+  const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
+  if (f) s = f[1].trim();
+  s = s.replace(/<!doctype[^>]*>|<\/?(html|head|body)[^>]*>/gi, "");
+  const a = s.search(/<(section|footer|div|header|nav|main)/i);
+  if (a > 0) s = s.slice(a);
+  return s.trim();
+}
 
 function dhakaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
