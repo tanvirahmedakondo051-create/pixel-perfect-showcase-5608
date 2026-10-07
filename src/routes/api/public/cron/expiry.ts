@@ -52,7 +52,15 @@ export const Route = createFileRoute("/api/public/cron/expiry")({
             if (want === "notice") notice++; else offline++;
           }
         }
-        return Response.json({ ok: true, notice, offline, deleted });
+        // 3. Renewed users: bring notice/offline sites back.
+        let restored = 0;
+        const { data: stale } = await db.from("projects").select("id, user_id").eq("is_published", true).in("deploy_status", ["notice", "offline"]).limit(200);
+        for (const p of stale ?? []) {
+          const { data: prof } = await db.from("profiles").select("plan_expires_at, plan_ended_at").eq("id", p.user_id).single();
+          const st = hostingStatus({ planExpiresAt: prof?.plan_expires_at ?? null, planEndedAt: prof?.plan_ended_at ?? null, fallbackCanHost, graceDays: (s as any)?.grace_days, deleteAfterDays: (s as any)?.delete_after_days });
+          if (st.state === "active") { await deployProject(db, p.id, origin); restored++; }
+        }
+        return Response.json({ ok: true, notice, offline, deleted, restored });
       },
     },
   },
