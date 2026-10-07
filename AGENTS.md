@@ -18,3 +18,4 @@
 - Plan expiry runs hourly via pg_cron → `/api/public/cron/expiry` (auth: `cron_token` app secret): grace = notice page only, then offline, then permanent delete of hosted copies/versions/uploads; days come from `site_settings.grace_days/delete_after_days`.
 - Chat uploads go to the private `uploads` bucket via `upload.functions.ts` and are served publicly at `/uploads/{project_id}/{file}`; images reach the AI as signed-URL vision parts; links in a prompt are auto-analysed by `analyze.server.ts`.
 - The builder has one chat + preview layout (no tabs); assets open in a popover.
+- Skill packs live in `skill_packs` and GitHub import analysis in `project_analysis`; `generate.ts` injects both into plan/build system prompts — keeps site-type expertise and imported-codebase context admin-editable and server-side.
