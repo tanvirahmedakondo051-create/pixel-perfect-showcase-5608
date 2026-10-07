@@ -18,21 +18,9 @@ FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on i
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
 const MARK = "<!--HEXA:NEXT-->";
-const OUTLINE_SYS = `You plan a single-page website. Split it into 4-7 build steps (sections), first = header/navigation + hero, last = footer. Output ONLY JSON: {"sections":[{"id":"hero","title":"<short Bangla title>","brief":"<one-line English brief of content>"}]}`;
-const DEFAULT_STEPS: Step[] = [
-  { id: "hero", title: "হেডার ও হিরো", brief: "navigation bar and hero section" },
-  { id: "features", title: "সেবা / বৈশিষ্ট্য", brief: "services or features grid" },
-  { id: "about", title: "আমাদের সম্পর্কে", brief: "about section" },
-  { id: "contact", title: "যোগাযোগ", brief: "contact section with form" },
-  { id: "footer", title: "ফুটার", brief: "footer" },
-];
-function parseSteps(t: string): Step[] {
-  try {
-    const j = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1));
-    const s = (j.sections ?? []).filter((x: any) => x?.title).slice(0, 7).map((x: any, i: number) => ({ id: String(x.id ?? i), title: String(x.title).slice(0, 40), brief: String(x.brief ?? x.title).slice(0, 200) }));
-    return s.length >= 2 ? s : DEFAULT_STEPS;
-  } catch { return DEFAULT_STEPS; }
-}
+const EFFICIENT = `
+
+EFFICIENCY: Write compact code — use Tailwind CDN utility classes or short shared CSS, no repeated inline styles, no comments, no lorem filler, no inline base64 images, no huge SVG paths (use icon fonts/CDN icons). Keep the whole page well under 25KB.`;
 function cleanFrag(t: string) {
   let s = t.trim();
   const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
@@ -196,8 +184,9 @@ export const Route = createFileRoute("/api/public/generate")({
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
 
-        const { data: libAssets } = await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
-        const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 600 || /^https?:/.test(a.url_or_code))
+        // Asset library: only for new builds, short list of small/URL assets (keeps system prompt small).
+        const { data: libAssets } = project.code_html ? { data: [] as any[] } : await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
+        const assetCtx = (libAssets ?? []).filter((a: any) => a.url_or_code.length < 300 || /^https?:/.test(a.url_or_code)).slice(0, 8)
           .map((a: any) => `- [${a.category}/${a.type}] ${a.name}: ${a.url_or_code}`).join("\n");
         const history = (project.messages as Msg[]) ?? [];
         const isPlan = body.mode === "plan";
@@ -240,7 +229,7 @@ export const Route = createFileRoute("/api/public/generate")({
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
-        const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
+        const recentMsgs = recentHist.filter((m) => m.role === "user").slice(-2).map((m) => ({ role: "user", content: m.content.slice(0, 600) }));
 
         const planMessages = [
           { role: "system", content: (s2.plan_prompt ?? "") + skillCtx + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
@@ -263,7 +252,8 @@ export const Route = createFileRoute("/api/public/generate")({
 
         // Clarifying questions before a new site build (max 3).
         if (body.intent === "ask") {
-          if (isPlan || project.code_html || isReact) return Response.json({ questions: [] });
+          // Detailed prompts or a chosen site type need no questions — saves a whole AI call.
+          if (isPlan || project.code_html || isReact || prompt.trim().split(/\s+/).length >= 12 || (pack && prompt.trim().split(/\s+/).length >= 5)) return Response.json({ questions: [] });
           const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
           for (const p of ordered) {
             try {
@@ -428,7 +418,7 @@ export const Route = createFileRoute("/api/public/generate")({
               const STEP: Record<string, string> = { writing: "ফাইল সেভ হচ্ছে...", installing: "ইনস্টল হচ্ছে... (npm install)", building: "বিল্ড হচ্ছে... (vite build)" };
               let files: { path: string; content: string }[] | null = null;
               let built = ""; let log = ""; let rTokens = 0;
-              for (let attempt = 0; attempt < 3 && !built; attempt++) {
+              for (let attempt = 0; attempt < 2 && !built; attempt++) {
                 send({ t: "progress", step: attempt ? "AI ভুল ঠিক করছে..." : "React কোড লিখছি...", tokens: rTokens });
                 const r = await run(msgs, false);
                 if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
@@ -446,7 +436,7 @@ export const Route = createFileRoute("/api/public/generate")({
                   log = String(out?.log ?? "build failed").slice(-3000);
                 } catch (e: any) { log = String(e?.message ?? e).slice(0, 1000); }
                 await setBuild("failed", log);
-                if (attempt < 2) {
+                if (attempt < 1) {
                   send({ t: "notice", msg: "বিল্ডে সমস্যা — AI নিজে ঠিক করছে..." });
                   msgs.push({ role: "assistant", content: JSON.stringify({ files }).slice(0, 150000) }, { role: "user", content: `npm build FAILED:\n${log}\n\nFix the error. Return the COMPLETE corrected files JSON.` });
                 }
@@ -481,18 +471,20 @@ export const Route = createFileRoute("/api/public/generate")({
                 baseHistory = history.map((m) => (m.kind === "paused" && m.checkpointId === resumeCp.id ? { ...m, resumed: true } : m));
                 await db.from("task_checkpoints").update({ status: "resumed" }).eq("id", resumeCp.id);
               } else {
+                // No separate outline call: steps are decided locally (1 step for simple sites, 2 grouped steps otherwise).
                 baseHistory = [...history, userMsg()];
-                send({ t: "progress", step: "পেজের গঠন ঠিক করছি...", tokens: 0 });
-                const r = await run([{ role: "system", content: OUTLINE_SYS + skillCtx }, ...summaryMsg, { role: "user", content: withExtra(prompt) }], false);
-                if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
-                tokens += r.tokens; baseTokens = tokens;
-                await charge(r.tokens, 0, "গঠন পরিকল্পনা: " + prompt.slice(0, 50));
-                steps = parseSteps(r.full);
+                const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length > 500;
+                steps = complex
+                  ? [
+                      { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "navigation header, hero, and the 2-3 most important content sections for this request" },
+                      { id: "rest", title: "বাকি অংশ ও ফুটার", brief: "remaining relevant sections (e.g. testimonials/gallery/contact form) and the footer" },
+                    ]
+                  : [{ id: "all", title: "সম্পূর্ণ ওয়েবসাইট", brief: "the COMPLETE one-page site: header/nav, hero, 3-4 relevant content sections, contact, footer" }];
                 taskId = mid();
               }
               const titles = steps.map((s) => s.title);
               const total = steps.length;
-              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").slice(0, 7000);
+              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s+/g, " ").slice(0, 3500);
               let lastCp: string | null = resumeCp?.id ?? null;
               const savePause = async () => {
                 const pct = Math.round((done.length / total) * 100);
@@ -515,15 +507,18 @@ export const Route = createFileRoute("/api/public/generate")({
                 send({ t: "progress", step: `${s.title} বানাচ্ছি... (${i + 1}/${total})`, tokens, steps: titles, stepIndex: i });
                 let r: { full: string; tokens: number } | null;
                 if (!partial) {
+                  const one = total === 1;
                   r = await run([
-                    { role: "system", content: buildSystem },
-                    { role: "user", content: withExtra(`Website request: ${prompt}\n\nFull plan of sections: ${steps.map((x) => `${x.title} (${x.brief})`).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this section inside <body>: ${s.title} — ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
+                    { role: "system", content: buildSystem + EFFICIENT },
+                    { role: "user", content: withExtra(one
+                      ? `Website request: ${prompt}\n\nWrite the complete website in one HTML document: ${s.brief}.`
+                      : `Website request: ${prompt}\n\nFull plan: ${steps.map((x) => x.brief).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this part inside <body>: ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
                   ], true);
                   if (r) { const h = extractHtml(r.full); if (/<body/i.test(h)) partial = h.includes(MARK) ? h : h.replace(/<\/body>/i, `${MARK}\n</body>`); }
                 } else {
                   r = await run([
-                    { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + `\n\nOUTPUT RULE: Output ONLY the raw HTML fragment for ONE section (e.g. a <section> or <footer>). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>.` },
-                    { role: "user", content: `Existing <head>:\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY this section: ${s.title} — ${s.brief}` },
+                    { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first.` + EFFICIENT },
+                    { role: "user", content: `Existing <head> (styles):\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY: ${s.brief}` },
                   ], true);
                   if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }

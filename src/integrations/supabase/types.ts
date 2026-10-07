@@ -747,6 +747,7 @@ export type Database = {
           rate_limit_per_minute: number
           require_email_verify: boolean
           server_ip: string
+          single_pass_simple: boolean
           site_name: string
           support_email: string
           support_whatsapp: string
@@ -784,6 +785,7 @@ export type Database = {
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string
+          single_pass_simple?: boolean
           site_name?: string
           support_email?: string
           support_whatsapp?: string
@@ -821,6 +823,7 @@ export type Database = {
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string
+          single_pass_simple?: boolean
           site_name?: string
           support_email?: string
           support_whatsapp?: string

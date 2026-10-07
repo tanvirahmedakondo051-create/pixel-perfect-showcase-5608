@@ -1,0 +1,1 @@
+ALTER TABLE public.site_settings ADD COLUMN IF NOT EXISTS single_pass_simple boolean NOT NULL DEFAULT true;
