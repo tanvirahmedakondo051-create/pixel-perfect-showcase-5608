@@ -236,6 +236,7 @@ function Builder() {
     const r = await publish({ data: { id: projectId, publish: !published.on } });
     if ("error" in r) return toast.error(r.error);
     setPub({ on: !published.on, sub: r.subdomain ?? null });
+    if ((r as any).deployError) toast.error((r as any).deployError);
     if (!published.on && r.subdomain) {
       const url = `${window.location.origin}/s/${r.subdomain}`;
       navigator.clipboard?.writeText(url).catch(() => {});
