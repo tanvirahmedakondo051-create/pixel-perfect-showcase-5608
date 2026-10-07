@@ -1022,28 +1022,34 @@ export type Database = {
       }
       site_users: {
         Row: {
+          avatar_url: string
           created_at: string
           email: string
           id: string
           name: string
           password_hash: string
           project_id: string
+          provider: string
         }
         Insert: {
+          avatar_url?: string
           created_at?: string
           email: string
           id?: string
           name?: string
-          password_hash: string
+          password_hash?: string
           project_id: string
+          provider?: string
         }
         Update: {
+          avatar_url?: string
           created_at?: string
           email?: string
           id?: string
           name?: string
           password_hash?: string
           project_id?: string
+          provider?: string
         }
         Relationships: [
           {
