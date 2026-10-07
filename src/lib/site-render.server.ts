@@ -22,7 +22,15 @@ function inject(html: string, extra: string) {
   return i >= 0 ? html.slice(0, i) + extra + html.slice(i) : html + extra;
 }
 
-function toBn(n: number) {
+function supportLink(s: any): string {
+  const wa = String(s?.support_whatsapp ?? "").replace(/[^\d]/g, "");
+  if (wa) return `https://wa.me/${wa}`;
+  if (s?.telegram_link) return s.telegram_link;
+  if (s?.support_email) return `mailto:${s.support_email}`;
+  return "";
+}
+
+export function toBn(n: number) {
   return String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[Number(d)]!);
 }
 
@@ -50,13 +58,24 @@ export async function renderPublishedSite(lookup: SiteLookup, appOrigin: string)
   const [{ data: prof }, { data: def }, { data: s }] = await Promise.all([
     db.from("profiles").select("plan_expires_at, plan_ended_at, plans(price_bdt, can_publish)").eq("id", p.user_id).maybeSingle(),
     db.from("plans").select("price_bdt, can_publish").eq("is_default", true).order("created_at").limit(1).maybeSingle(),
-    db.from("site_settings").select("free_block_publish").eq("id", 1).maybeSingle(),
+    db.from("site_settings").select("free_block_publish, grace_days, delete_after_days, support_whatsapp, support_email, telegram_link").eq("id", 1).maybeSingle(),
   ]);
   const pr: any = prof;
   const expired = pr?.plan_expires_at && new Date(pr.plan_expires_at) < new Date();
   const fallback: any = expired ? def : (pr?.plans ?? def);
   const fallbackCanHost = !!fallback && fallback.can_publish !== false && !(s?.free_block_publish && (fallback.price_bdt ?? 0) === 0);
-  const status = hostingStatus({ planExpiresAt: pr?.plan_expires_at ?? null, planEndedAt: pr?.plan_ended_at ?? null, fallbackCanHost });
+  const ss: any = s ?? {};
+  const status = hostingStatus({ planExpiresAt: pr?.plan_expires_at ?? null, planEndedAt: pr?.plan_ended_at ?? null, fallbackCanHost, graceDays: ss.grace_days, deleteAfterDays: ss.delete_after_days });
+  const contact = supportLink(ss);
+  if (status.state === "grace") {
+    return new Response(
+      page("Plan expired", `<h1>⚠️ Contact your provider and upgrade your plan</h1><p>এই ওয়েবসাইটের প্যাকেজের মেয়াদ শেষ। চালু রাখতে প্যাকেজ রিনিউ বা আপগ্রেড করুন।</p>${contact ? `<a href="${esc(contact)}" target="_blank" rel="noopener">যোগাযোগ করুন</a>` : `<a href="${appOrigin}/pricing">প্যাকেজ আপগ্রেড করুন</a>`}`),
+      { status: 200, headers: { ...headers, "Cache-Control": "public, max-age=60" } },
+    );
+  }
+  if (status.state === "deleted") {
+    return new Response(page("সাইট পাওয়া যায়নি", `<h1>সাইটটি পাওয়া যায়নি</h1>`), { status: 404, headers: { ...headers, "Cache-Control": "public, max-age=60" } });
+  }
 
   if (status.state === "offline") {
     return new Response(
@@ -65,9 +84,6 @@ export async function renderPublishedSite(lookup: SiteLookup, appOrigin: string)
     );
   }
   let extra = "";
-  if (status.state === "grace") {
-    extra += `<div id="hexa-grace" style="position:fixed;left:12px;right:12px;top:12px;z-index:2147483647;max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:12px;background:#0f0a1e;color:#ece9f7;font:14px/1.5 'Hind Siliguri',sans-serif;box-shadow:0 10px 30px rgba(79,70,229,.35)"><span style="flex:1">এই ওয়েবসাইটের প্যাকেজ শেষ। আপগ্রেড না করলে <b>${toBn(status.daysLeft)} দিন</b> পর ওয়েবসাইটটি বন্ধ হয়ে যাবে।</span><button onclick="this.parentNode.remove()" aria-label="বন্ধ করুন" style="background:none;border:0;color:inherit;font-size:20px;min-width:32px;min-height:32px;cursor:pointer">×</button></div>`;
-  }
   if (p.show_badge) {
     extra += `<a href="${appOrigin}/" target="_blank" rel="noopener" style="position:fixed;right:12px;bottom:12px;z-index:2147483646;padding:6px 12px;border-radius:999px;background:linear-gradient(135deg,#4f46e5,#06b6d4);color:#fff;font:600 12px 'Hind Siliguri',sans-serif;text-decoration:none">Hexa AI দিয়ে তৈরি</a>`;
   }
