@@ -109,8 +109,8 @@ function parseSchemaJson(t: string): any {
 
 /** Designs tables with the AI (1 retry), creates them, turns the backend on. Never fails just because the AI output was bad. */
 export async function autoSetupBackend(db: any, p: any, userId: string, prompt: string, providers: any[], tokensPerCoin: number, existing?: any[]) {
-  if (!existing) existing = (await db.from("backend_tables").select("table_name, schema_json").eq("project_id", p.id)).data ?? [];
-  const ctxTables = existing.map((t: any) => `${t.table_name}(${(t.schema_json?.columns ?? []).map((c: any) => c.name).join(",")})`).join("; ");
+  const ex: any[] = existing ?? (await db.from("backend_tables").select("table_name, schema_json").eq("project_id", p.id)).data ?? [];
+  const ctxTables = ex.map((t: any) => `${t.table_name}(${(t.schema_json?.columns ?? []).map((c: any) => c.name).join(",")})`).join("; ");
   const userMsg = (ctxTables ? `Existing tables (do not repeat): ${ctxTables}\n\n` : "") + prompt.slice(0, 3000);
   let parsed: any = null; let tokens = 0;
   for (let attempt = 0; attempt < 2 && !parsed?.tables; attempt++) {
@@ -135,7 +135,7 @@ export async function autoSetupBackend(db: any, p: any, userId: string, prompt: 
   const coins = Math.round((tokens / Math.max(1, tokensPerCoin)) * 100) / 100;
   if (coins > 0) await db.rpc("add_coins", { _user: userId, _amount: -coins, _type: "spend", _reason: "ব্যাকএন্ড সেটআপ" });
   const { maxTables } = await backendLimits(db);
-  const have = new Set(existing.map((t: any) => t.table_name));
+  const have = new Set(ex.map((t: any) => t.table_name));
   const created: string[] = [];
   const wanted: any[] = Array.isArray(parsed?.tables) ? parsed.tables : [];
   for (const t of wanted) {
