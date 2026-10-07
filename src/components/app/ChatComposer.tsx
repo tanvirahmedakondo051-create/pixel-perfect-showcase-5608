@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Plus, ChevronDown, Mic, MicOff, ArrowUp, Loader2, Paperclip, Palette, Sparkles, Hammer, ClipboardList, Check } from "lucide-react";
+import { Plus, ChevronDown, Mic, MicOff, ArrowUp, Loader2, Paperclip, Palette, Sparkles, Hammer, ClipboardList, Check, Square } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -21,6 +21,7 @@ type Props = {
   onPasteFiles: (f: FileList) => void;
   top?: ReactNode;
   taRef: React.RefObject<HTMLTextAreaElement | null>;
+  onStop?: () => void;
 };
 
 export function ChatComposer(p: Props) {
@@ -105,7 +106,9 @@ export function ChatComposer(p: Props) {
                 {listening ? <MicOff className="size-5" /> : <Mic className="size-5" />}
               </button>
             )}
-            {(p.canSend || p.busy || !micOk) && <button onClick={p.onSend} disabled={p.busy || !p.canSend} className="grid size-11 shrink-0 place-items-center rounded-full bg-foreground text-background disabled:opacity-30" aria-label="পাঠান">
+            {p.busy && p.onStop ? (
+              <button onClick={p.onStop} className="grid size-11 shrink-0 place-items-center rounded-full bg-foreground text-background" aria-label="থামান"><Square className="size-4 fill-current" /></button>
+            ) : (p.canSend || p.busy || !micOk) && <button onClick={p.onSend} disabled={p.busy || !p.canSend} className="grid size-11 shrink-0 place-items-center rounded-full bg-foreground text-background disabled:opacity-30" aria-label="পাঠান">
               {p.busy ? <Loader2 className="size-5 animate-spin" /> : <ArrowUp className="size-5" />}
             </button>}
           </div>
