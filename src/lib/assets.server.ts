@@ -80,17 +80,18 @@ ICONS: use Iconify SVG images: <img src="https://api.iconify.design/{set}:{name}
 RULES: NEVER use emoji as UI icons. Backgrounds: subtle Haikei-style inline SVG waves/blobs/layered gradients in brand colors — never downloaded background images. Hero = one strong photo OR visual background, plus Lottie only if it doesn't clutter. Scroll-reveal + hover interactions, respect prefers-reduced-motion. No irrelevant stock imagery.`;
 }
 
-const FALLBACK = `<script>(function(){document.addEventListener("error",function(e){var t=e.target;if(!t||t.tagName!=="IMG")return;if(t.classList.contains("hx-icon")){t.style.visibility="hidden";return}var d=document.createElement("div");d.setAttribute("role","img");d.setAttribute("aria-label",t.alt||"");d.style.cssText="width:100%;height:100%;min-height:"+(t.offsetHeight||200)+"px;border-radius:inherit;background:linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))";t.replaceWith(d)},true);setTimeout(function(){document.querySelectorAll("lottie-player").forEach(function(l){if(!l.shadowRoot||!l.shadowRoot.querySelector("svg,canvas")){var c=l.closest(".hx-lottie")||l;c.style.display="none"}})},6000);if(matchMedia("(prefers-reduced-motion: reduce)").matches)document.querySelectorAll("lottie-player").forEach(function(l){l.removeAttribute("autoplay");l.removeAttribute("loop")})})();</script>`;
+const FALLBACK = `<script data-hx-fallback>(function(){document.addEventListener("error",function(e){var t=e.target;if(!t||t.tagName!=="IMG")return;if(t.classList.contains("hx-icon")){t.style.visibility="hidden";return}var d=document.createElement("div");d.setAttribute("role","img");d.setAttribute("aria-label",t.alt||"");d.style.cssText="width:100%;height:100%;min-height:"+(t.offsetHeight||200)+"px;border-radius:inherit;background:linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))";t.replaceWith(d)},true);setTimeout(function(){document.querySelectorAll("lottie-player").forEach(function(l){if(!l.shadowRoot||!l.shadowRoot.querySelector("svg,canvas")){var c=l.closest(".hx-lottie")||l;c.style.display="none"}})},6000);if(matchMedia("(prefers-reduced-motion: reduce)").matches)document.querySelectorAll("lottie-player").forEach(function(l){l.removeAttribute("autoplay");l.removeAttribute("loop")})})();</script>`;
 
 /** Inject only the scripts the page uses, lazy-load images, size Unsplash URLs, add graceful fallbacks. */
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
-  let s = html.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a, off) => (off < html.search(/<main|<section/i) + 2000 && off < 4000 ? m : `<img loading="lazy" decoding="async"${a}>`));
+  let n = 0;
+  let s = html.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a) => (n++ === 0 ? m : `<img loading="lazy" decoding="async"${a}>`));
   s = s.replace(/(https:\/\/images\.unsplash\.com\/photo-[\w-]+)(?![\w?=&-]*[?&]w=)(\?[^"'\s)]*)?/g, (_m, base, q) => `${base}${q ? q + "&" : "?"}auto=format&fit=crop&w=1600&q=75`);
   const head: string[] = [];
   if (/<lottie-player/i.test(s) && !/lottie-player\.js/i.test(s)) head.push(`<script defer src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script>`);
   if (/<lord-icon/i.test(s) && !/lordicon\.js/i.test(s)) head.push(`<script defer src="https://cdn.lordicon.com/lordicon.js"></script>`);
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
-  if (!s.includes("hx-lottie\")||l")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
+  if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
   return s;
 }
