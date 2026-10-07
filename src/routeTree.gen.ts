@@ -31,6 +31,7 @@ import { Route as AuthenticatedBuilderProjectIdRouteImport } from './routes/_aut
 import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public/aurapay-webhook'
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
 import { Route as ApiPublicSiteRouteImport } from './routes/api/public/site'
+import { Route as OauthGithubReturnRouteImport } from './routes/oauth.github.return'
 import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
 import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 
@@ -151,6 +152,11 @@ const ApiPublicSiteRoute = ApiPublicSiteRouteImport.update({
   path: '/api/public/site',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthGithubReturnRoute = OauthGithubReturnRouteImport.update({
+  id: '/oauth/github/return',
+  path: '/oauth/github/return',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminPlansIndexRoute =
   AuthenticatedAdminPlansIndexRouteImport.update({
     id: '/plans/',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
+  '/oauth/github/return': typeof OauthGithubReturnRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
@@ -209,6 +216,7 @@ export interface FileRoutesByTo {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
+  '/oauth/github/return': typeof OauthGithubReturnRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
@@ -236,6 +244,7 @@ export interface FileRoutesById {
   '/api/public/aurapay-webhook': typeof ApiPublicAurapayWebhookRoute
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
+  '/oauth/github/return': typeof OauthGithubReturnRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
@@ -263,6 +272,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/api/public/site'
+    | '/oauth/github/return'
     | '/admin/'
     | '/admin/plans/$id'
     | '/admin/plans/'
@@ -287,6 +297,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/api/public/site'
+    | '/oauth/github/return'
     | '/admin'
     | '/admin/plans/$id'
     | '/admin/plans'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/api/public/aurapay-webhook'
     | '/api/public/generate'
     | '/api/public/site'
+    | '/oauth/github/return'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/plans/$id'
     | '/_authenticated/admin/plans/'
@@ -329,6 +341,7 @@ export interface RootRouteChildren {
   ApiPublicAurapayWebhookRoute: typeof ApiPublicAurapayWebhookRoute
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
+  OauthGithubReturnRoute: typeof OauthGithubReturnRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -487,6 +500,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicSiteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/oauth/github/return': {
+      id: '/oauth/github/return'
+      path: '/oauth/github/return'
+      fullPath: '/oauth/github/return'
+      preLoaderRoute: typeof OauthGithubReturnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin/plans/': {
       id: '/_authenticated/admin/plans/'
       path: '/plans'
@@ -561,6 +581,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicAurapayWebhookRoute: ApiPublicAurapayWebhookRoute,
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
+  OauthGithubReturnRoute: OauthGithubReturnRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
