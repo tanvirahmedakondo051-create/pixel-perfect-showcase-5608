@@ -200,3 +200,36 @@ export const adminSetBackendKey = createServerFn({ method: "POST" })
     if (error) return { error: "সেভ করা যায়নি" };
     return { ok: true };
   });
+
+export const adminGetPexelsKey = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { data } = await db.from("app_secrets").select("value").eq("name", "pexels_api_key").maybeSingle();
+    return { masked: data?.value ? mask(data.value) : "" };
+  });
+
+export const adminSetPexelsKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string }) => z.object({ key: z.string().trim().min(8).max(500) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const db: any = await adminDb(context);
+    const { error } = await db.from("app_secrets").upsert({ name: "pexels_api_key", value: data.key, updated_at: new Date().toISOString() });
+    if (error) return { error: "সেভ করা যায়নি" };
+    return { ok: true };
+  });
+
+export const adminTestPexels = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { getPexelsKey } = await import("./assets.server");
+    const key = await getPexelsKey(db);
+    if (!key) return { error: "Pexels key দেওয়া হয়নি" };
+    try {
+      const r = await fetch("https://api.pexels.com/v1/search?per_page=1&query=office", { headers: { Authorization: key }, signal: AbortSignal.timeout(8000) });
+      return r.ok ? { ok: true as const } : { error: `Pexels সংযোগ ব্যর্থ (${r.status}) — key যাচাই করুন` };
+    } catch {
+      return { error: "Pexels এ সংযোগ হয়নি" };
+    }
+  });
