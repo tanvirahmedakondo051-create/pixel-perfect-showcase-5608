@@ -69,6 +69,11 @@ function Settings() {
       <Panel title="ব্যাকএন্ড (ইউজারদের সাইটের ডেটাবেস)">
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">ইউজারের সাইটে লগইন/ফর্ম/ডেটা সেভ লাগলে প্ল্যাটফর্মের নিজস্ব ডেটাবেসে আলাদা আলাদা টেবিল তৈরি হয় — এখনই কাজ করে, কিছু সেটআপ লাগে না। ভবিষ্যতে আলাদা মাস্টার প্রজেক্ট ব্যবহারের জন্য নিচের তথ্য রাখতে পারেন (ঐচ্ছিক)।</p>
+          <div className="rounded-xl border p-3 text-sm">
+            <p className="font-semibold">সাইট ভিজিটরদের Google লগইন</p>
+            <p className="mt-1 text-muted-foreground">Google Cloud Console-এর OAuth ক্লায়েন্টে এই রিডাইরেক্ট ঠিকানাটি যোগ করুন:</p>
+            <code className="mt-1 block break-all font-en text-xs text-cyan">{typeof window !== "undefined" ? window.location.origin : ""}/api/public/site-oauth/google/callback</code>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="প্রতি প্রজেক্টে সর্বোচ্চ টেবিল"><input type="number" min={1} className={inputCls} value={f.backend_max_tables} onChange={set("backend_max_tables")} /></Field>
             <Field label="প্রতি টেবিলে সর্বোচ্চ রো"><input type="number" min={100} className={inputCls} value={f.backend_max_rows} onChange={set("backend_max_rows")} /></Field>
