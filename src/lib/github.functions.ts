@@ -122,6 +122,9 @@ function parseRepo(input: string) {
   return m ? `${m[1]}/${m[2]}` : null;
 }
 
+type FileEntry = { path: string; role: string; size: number };
+const roleOf = (p: string) => /\.html?$/i.test(p) ? "পেজ" : /\.(css|scss)$/i.test(p) ? "স্টাইল" : /\.(m?js|ts|tsx|jsx)$/i.test(p) ? "স্ক্রিপ্ট" : /\.(png|jpe?g|gif|svg|webp|ico)$/i.test(p) ? "ছবি" : /\.json$/i.test(p) ? "কনফিগ" : /\.md$/i.test(p) ? "ডকুমেন্ট" : "অন্যান্য";
+
 export const importFromGithub = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { projectId: string; repo: string }) => z.object({ projectId: z.string().uuid(), repo: z.string().min(3).max(300) }).parse(d))
@@ -130,25 +133,62 @@ export const importFromGithub = createServerFn({ method: "POST" })
     if (!p) return { error: "প্রজেক্ট পাওয়া যায়নি" };
     const full = parseRepo(data.repo);
     if (!full) return { error: "সঠিক GitHub লিংক দিন, যেমন github.com/user/repo" };
-    const { getConn, gh, unb64 } = await import("./github.server");
+    const { getConn, gh, unb64, adminDb } = await import("./github.server");
     const c = await getConn(context.userId).catch(() => null);
-    let html: string | null = null;
-    if (c) {
-      const r = await gh(c.key, `/repos/${full}/contents/index.html`);
-      if (r.ok) html = unb64(((await r.json()) as any).content ?? "");
+    const api = async (path: string) => {
+      if (c) { const r = await gh(c.key, path); if (r.ok) return r.json(); }
+      const r = await fetch(`https://api.github.com${path}`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "HexaAI" } });
+      return r.ok ? r.json() : null;
+    };
+    const meta: any = await api(`/repos/${full}`);
+    if (!meta) return { error: "রিপো পাওয়া যায়নি (প্রাইভেট হলে আগে GitHub সংযোগ দিন)" };
+    const tree: any = await api(`/repos/${full}/git/trees/${encodeURIComponent(meta.default_branch)}?recursive=1`);
+    const all: FileEntry[] = ((tree?.tree ?? []) as any[]).filter((t) => t.type === "blob" && !/(^|\/)(node_modules|\.git)\//.test(t.path))
+      .slice(0, 200).map((t) => ({ path: t.path, role: roleOf(t.path), size: t.size ?? 0 }));
+    const paths = all.map((f) => f.path);
+    const entry = ["index.html", "public/index.html", "docs/index.html", "dist/index.html", "build/index.html"].find((x) => paths.includes(x)) ?? paths.find((x) => /(^|\/)index\.html$/i.test(x));
+    const getText = async (path: string) => {
+      const j: any = await api(`/repos/${full}/contents/${path.split("/").map(encodeURIComponent).join("/")}`);
+      return j?.content ? unb64(j.content) : null;
+    };
+    const pkgRaw = paths.includes("package.json") ? await getText("package.json") : null;
+    const pkg = pkgRaw ? (() => { try { return JSON.parse(pkgRaw); } catch { return {}; } })() : {};
+    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    if (!entry) return { error: deps.react || deps.next || deps.vue ? "এটি React/Vue প্রজেক্ট — বিল্ড ছাড়া চালানো যায় না। index.html আছে এমন স্ট্যাটিক রিপো দিন।" : "রিপোতে index.html পাওয়া যায়নি" };
+    let html = await getText(entry);
+    if (!html || !/<\w+/.test(html)) return { error: "index.html পড়া যায়নি" };
+    const dir = entry.includes("/") ? entry.slice(0, entry.lastIndexOf("/") + 1) : "";
+    const resolve = (href: string) => { const parts = (dir + href.replace(/^\.\//, "").replace(/^\//, "")).split("/"); const out: string[] = []; for (const s of parts) { if (s === "..") out.pop(); else if (s && s !== ".") out.push(s); } return out.join("/"); };
+    // Inline local stylesheets and scripts so the single-file preview works.
+    for (const m of [...html.matchAll(/<link[^>]+rel=["']?stylesheet["']?[^>]*>/gi)]) {
+      const href = m[0].match(/href=["']([^"']+)["']/i)?.[1];
+      if (!href || /^(https?:)?\/\//.test(href)) continue;
+      const css = paths.includes(resolve(href)) ? await getText(resolve(href)) : null;
+      if (css) html = html.replace(m[0], `<style>/* ${href} */\n${css}\n</style>`);
     }
-    if (!html) {
-      const r = await fetch(`https://api.github.com/repos/${full}/contents/index.html`, { headers: { Accept: "application/vnd.github.raw", "User-Agent": "HexaAI" } });
-      if (r.ok) html = await r.text();
+    for (const m of [...html.matchAll(/<script([^>]*)src=["']([^"']+)["']([^>]*)><\/script>/gi)]) {
+      const src = m[2];
+      if (/^(https?:)?\/\//.test(src)) continue;
+      const js = paths.includes(resolve(src)) ? await getText(resolve(src)) : null;
+      if (js) html = html.replace(m[0], `<script${m[1]}${m[3]}>/* ${src} */\n${js.replace(/<\/script/gi, "<\\/script")}\n</script>`);
     }
-    if (!html || !/<\w+/.test(html)) return { error: "রিপোতে index.html পাওয়া যায়নি" };
     if (html.length > 1_000_000) return { error: "ফাইলটি অনেক বড়" };
+    const fw: string[] = [];
+    if (/tailwind/i.test(html) || deps.tailwindcss || paths.some((x) => /tailwind\.config/.test(x))) fw.push("Tailwind");
+    if (/bootstrap/i.test(html) || deps.bootstrap) fw.push("Bootstrap");
+    if (/jquery/i.test(html) || deps.jquery) fw.push("jQuery");
+    if (/alpinejs|x-data=/i.test(html)) fw.push("Alpine.js");
+    if (deps.vite) fw.push("Vite");
+    const framework = fw.length ? fw.join(" + ") : "সাধারণ HTML/CSS";
+    const db = await adminDb();
+    await db.from("project_analysis").upsert({ project_id: p.id, file_map_json: all as any, framework, entry_file: entry, file_count: all.length, analyzed_at: new Date().toISOString() }, { onConflict: "project_id" });
     const now = new Date().toISOString();
+    const names = all.slice(0, 4).map((f) => f.path.split("/").pop()).join(", ");
     const { data: proj } = await context.supabase.from("projects").select("messages").eq("id", p.id).single();
-    const msgs = [...((proj?.messages as any[]) ?? []), { role: "assistant", content: `✓ GitHub (${full}) থেকে ইমপোর্ট হয়েছে`, at: now, mode: "build" }];
+    const msgs = [...((proj?.messages as any[]) ?? []), { role: "assistant", kind: "analysis", content: `📁 ${all.length}টি ফাইল পেলাম — ${names}${all.length > 4 ? "..." : ""}\nফ্রেমওয়ার্ক: ${framework} · মূল ফাইল: ${entry}\nAI এখন প্রজেক্ট বুঝে গেছে ✅ (GitHub: ${full})`, files_map: all.slice(0, 60), at: now, mode: "build" }];
     const { error } = await context.supabase.from("projects").update({ code_html: html, messages: msgs }).eq("id", p.id);
     if (error) return { error: "সেভ করা যায়নি" };
-    return { ok: true as const, html };
+    return { ok: true as const, html, fileCount: all.length, framework };
   });
 
 export const listGithubCommits = createServerFn({ method: "GET" })

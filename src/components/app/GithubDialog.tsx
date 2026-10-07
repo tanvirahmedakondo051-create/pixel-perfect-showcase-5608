@@ -147,7 +147,7 @@ export function GithubDialog({ open, onOpenChange, projectId, projectName, onImp
                     </Select>
                   )
                 ) : <input className={`${inp} font-en`} placeholder="https://github.com/user/repo" value={link} onChange={(e) => setLink(e.target.value)} />}
-                <p className="text-xs text-muted-foreground">রিপোর index.html ফাইলটি লোড হবে এবং বর্তমান ওয়েবসাইটের জায়গায় বসবে।</p>
+                <p className="text-xs text-muted-foreground">AI পুরো রিপো বিশ্লেষণ করবে, CSS/JS একসাথে করে index.html লোড হবে এবং বর্তমান ওয়েবসাইটের জায়গায় বসবে।</p>
                 <button disabled={busy} onClick={doImport} className={`${btn} w-full bg-brand`}>{busy && <Loader2 className="size-4 animate-spin" />} ইমপোর্ট করুন</button>
               </div>
             )}

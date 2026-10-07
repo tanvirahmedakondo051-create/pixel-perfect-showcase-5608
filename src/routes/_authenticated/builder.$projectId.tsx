@@ -4,8 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 const AssetPanel = lazy(() => import("@/components/app/AssetPanel"));
 import { toast } from "sonner";
-import { ArrowRight, Send, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, ClipboardList, Hammer, CheckCircle2, Paperclip, Palette, FileText, Server } from "lucide-react";
+import { ArrowRight, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, CheckCircle2, FileText, Server, Sparkles } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChatComposer, type Chip } from "@/components/app/ChatComposer";
+import { useSkillPacks } from "@/lib/skills";
 import { uploadChatFile } from "@/lib/upload.functions";
 import { GithubDialog } from "@/components/app/GithubDialog";
 import { VersionsDialog } from "@/components/app/VersionsDialog";
@@ -75,6 +78,8 @@ function Builder() {
   const [ghOpen, setGhOpen] = useState(false);
   const [verOpen, setVerOpen] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
+  const [skillOpen, setSkillOpen] = useState(false);
+  const { data: packs } = useSkillPacks();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -110,12 +115,7 @@ function Builder() {
   const used = usedOverride ?? tokensToday(profile);
   const pct = Math.min(100, (used / limit) * 100);
 
-  const autosize = () => {
-    const t = taRef.current;
-    if (!t) return;
-    t.style.height = "auto";
-    t.style.height = Math.min(t.scrollHeight, 180) + "px";
-  };
+  const autosize = () => {};
 
   const send = async (text?: string, modeOverride?: "plan" | "build") => {
     const m0 = modeOverride ?? mode;
@@ -245,6 +245,42 @@ function Builder() {
   };
 
   const changes = (project as any)?.changes_since_publish ?? 0;
+  const packId = (project as any)?.skill_pack_id as string | null;
+  const currentPack = packs?.find((p) => p.id === packId) ?? null;
+  const choosePack = async (id: string | null) => {
+    const { error } = await supabase.from("projects").update({ skill_pack_id: id } as any).eq("id", projectId);
+    if (error) return toast.error("সেভ করা যায়নি");
+    setSkillOpen(false);
+    qc.invalidateQueries({ queryKey: ["project", projectId] });
+    toast.success(id ? "স্কিল প্যাক চালু হয়েছে" : "সাধারণ মোড");
+  };
+  const SkillGrid = () => (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {[...(packs ?? []), null].map((s) => {
+        const active = (s?.id ?? null) === packId;
+        return (
+          <button key={s?.id ?? "general"} onClick={() => choosePack(s?.id ?? null)} className={`glass flex min-h-14 items-center justify-center gap-2 rounded-2xl px-3 text-sm ${active ? "border-cyan text-cyan" : "hover:border-primary"}`}>
+            <span className="text-lg">{s?.icon ?? "✨"}</span>{s?.name_bn ?? "সাধারণ"}
+          </button>
+        );
+      })}
+    </div>
+  );
+  const recent = [...new Set(messages.filter((m) => m.role === "user" && m.content.length < 60).map((m) => m.content))].slice(-2).reverse();
+  const suggestionChips: Chip[] = [
+    ...(html ? [
+      published.on
+        ? (changes > 0 ? { label: "লাইভ আপডেট", icon: <RefreshCw className="size-3.5" />, onClick: runLive } : null)
+        : { label: "পাবলিশ করুন", icon: <Globe className="size-3.5" />, onClick: doPublish },
+      { label: "মোবাইলে দেখুন", icon: <Smartphone className="size-3.5" />, onClick: () => { setDevice("mobile"); setShowCode(false); setMobilePreview(true); } },
+      canCode ? { label: "কোড দেখুন", icon: <Code2 className="size-3.5" />, onClick: () => { setShowCode(true); setMobilePreview(true); } } : null,
+      { label: "GitHub-এ পাঠান", icon: <Github className="size-3.5" />, onClick: () => setGhOpen(true) },
+    ] : [
+      { label: `${currentPack?.name_bn ?? "সুন্দর"} সাইট বানাও`, icon: <Sparkles className="size-3.5" />, onClick: () => send(`একটা সুন্দর ${currentPack?.name_bn ?? ""} ওয়েবসাইট বানাও`.replace(/\s+/g, " ")) },
+      { label: "GitHub থেকে আনুন", icon: <Github className="size-3.5" />, onClick: () => setGhOpen(true) },
+    ]),
+    ...recent.map((r) => ({ label: r.length > 28 ? r.slice(0, 28) + "…" : r, icon: <History className="size-3.5" />, onClick: () => send(r) })),
+  ].filter(Boolean) as Chip[];
   if (isLoading) return <div className="grid min-h-screen place-items-center"><Loader2 className="size-8 animate-spin text-cyan" /></div>;
 
   const toolbar = (
@@ -352,28 +388,35 @@ function Builder() {
             <Progress value={pct} className={`mt-1.5 h-1.5 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
           </div>
 
-          <div className={`border-b border-border px-2 py-2`}>
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1" role="tablist" aria-label="মোড">
-              <button onClick={() => setMode("plan")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "plan" ? "bg-cyan/20 text-cyan" : ""}`}><ClipboardList className="size-4" /> প্ল্যান</button>
-              <button onClick={() => setMode("build")} className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg text-sm ${mode === "build" ? "bg-primary text-primary-foreground" : ""}`}><Hammer className="size-4" /> বিল্ড</button>
-            </div>
-            {mode === "plan" && <p className="mt-1.5 text-center text-[11px] text-muted-foreground">প্ল্যান মোডে AI আলোচনা করবে, ওয়েবসাইট বদলাবে না</p>}
+          <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs">
+            <button onClick={() => setSkillOpen(true)} className="flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 hover:border-cyan">
+              <span>{currentPack?.icon ?? "✨"}</span>{currentPack?.name_bn ?? "সাধারণ"}
+            </button>
+            {mode === "plan" && <span className="text-cyan">প্ল্যান মোড — সাইট বদলাবে না</span>}
           </div>
           <div className={`flex-1 space-y-3 overflow-y-auto p-4`}>
             {!messages.length && (
-              <div className="pt-6 text-center">
+              <div className="pt-4 text-center">
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
-                <p className="mt-1 text-sm text-muted-foreground">বাংলায় লিখুন, অথবা নিচের একটি বেছে নিন</p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
-                  {chips.map((c) => (
-                    <button key={c} onClick={() => send(`একটা সুন্দর ${c} বানাও`)} className="glass min-h-12 rounded-full px-4 text-sm hover:border-primary">{c}</button>
-                  ))}
-                </div>
+                <p className="mt-1 text-sm text-muted-foreground">ধরন বাছাই করলে AI সেই বিষয়ে বিশেষজ্ঞের মতো বানাবে</p>
+                <div className="mt-5"><SkillGrid /></div>
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-muted"}`}>
-                {m.mode === "plan" && m.role === "assistant" ? (
+              <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : (m as any).kind === "analysis" ? "max-w-full rounded-bl-sm border border-cyan/40 bg-cyan/5" : "rounded-bl-sm bg-muted"}`}>
+                {(m as any).kind === "analysis" ? (
+                  <>
+                    <div className="whitespace-pre-line">{m.content}</div>
+                    {!!(m as any).files_map?.length && (
+                      <details className="mt-2 text-xs">
+                        <summary className="cursor-pointer text-cyan">ফাইল তালিকা দেখুন</summary>
+                        <ul className="mt-1 max-h-48 space-y-0.5 overflow-auto font-en">
+                          {(m as any).files_map.map((f: any) => <li key={f.path} className="flex justify-between gap-2"><span className="truncate">{f.path}</span><span className="shrink-0 text-muted-foreground">{f.role}</span></li>)}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                ) : m.mode === "plan" && m.role === "assistant" ? (
                   <>
                     <div className="whitespace-pre-line">{m.content.replace(OPT_RE, "").replace(/\n{3,}/g, "\n\n").trim()}</div>
                     {i === messages.length - 1 && !streaming && [...m.content.matchAll(OPT_RE)].length > 0 && (
@@ -408,54 +451,53 @@ function Builder() {
             <div ref={endRef} />
           </div>
 
-          <div className={`border-t border-border bg-background/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]`}>
-            {(!!atts.length || uploading) && (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {atts.map((a, i) => (
-                  <div key={a.path} className="relative">
-                    {a.type.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-14 rounded-lg object-cover" /> : <span className="flex h-14 items-center gap-1 rounded-lg bg-muted px-2 text-xs"><FileText className="size-4" />{a.name.slice(0, 14)}</span>}
-                    <button onClick={() => setAtts((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-destructive text-destructive-foreground" aria-label="সরান"><X className="size-3" /></button>
-                  </div>
-                ))}
-                {uploading && <div className="grid size-14 place-items-center rounded-lg bg-muted"><Loader2 className="size-4 animate-spin text-cyan" /></div>}
-              </div>
-            )}
-            {LINK_RE.test(input) && (
-              <p className="mb-2 flex items-center gap-1.5 text-xs text-cyan"><Link2 className="size-3" /> লিংকটি AI নিজে খুলে ডিজাইন বিশ্লেষণ করবে</p>
-            )}
+          <div className="bg-background/80 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             <input ref={fileRef} type="file" multiple accept="image/*,application/pdf,text/plain" className="hidden" onChange={(e) => onFiles(e.target.files)} />
-            <div className="flex items-end gap-1 rounded-2xl border border-input bg-card p-2 focus-within:border-cyan">
-              <button onClick={() => fileRef.current?.click()} disabled={uploading || atts.length >= 4} className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40" aria-label="ফাইল যোগ করুন"><Paperclip className="size-5" /></button>
-              <Popover open={assetOpen} onOpenChange={setAssetOpen}>
-                <PopoverTrigger asChild>
-                  <button className="grid size-11 shrink-0 place-items-center rounded-xl text-muted-foreground hover:bg-accent hover:text-foreground" aria-label="অ্যাসেট"><Palette className="size-5" /></button>
-                </PopoverTrigger>
-                <PopoverContent side="top" align="start" className="h-[min(70dvh,520px)] w-[min(92vw,420px)] overflow-hidden p-0">
-                  {assetOpen && (
-                    <Suspense fallback={<div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-cyan" /></div>}>
-                      <AssetPanel onPick={(t) => { setInput((v) => (v ? v + "\n" : "") + t); setAssetOpen(false); toast.success("অ্যাসেট বার্তায় যোগ হয়েছে"); setTimeout(autosize); }} />
-                    </Suspense>
+            <Popover open={assetOpen} onOpenChange={setAssetOpen}>
+              <PopoverTrigger asChild><span className="block" /></PopoverTrigger>
+              <PopoverContent side="top" align="start" className="h-[min(70dvh,520px)] w-[min(92vw,420px)] overflow-hidden p-0">
+                {assetOpen && (
+                  <Suspense fallback={<div className="grid h-full place-items-center"><Loader2 className="size-6 animate-spin text-cyan" /></div>}>
+                    <AssetPanel onPick={(t) => { setInput((v) => (v ? v + "\n" : "") + t); setAssetOpen(false); toast.success("অ্যাসেট বার্তায় যোগ হয়েছে"); }} />
+                  </Suspense>
+                )}
+              </PopoverContent>
+            </Popover>
+            <ChatComposer
+              taRef={taRef}
+              value={input}
+              onChange={setInput}
+              onSend={() => send()}
+              mode={mode}
+              onMode={setMode}
+              chips={suggestionChips}
+              busy={streaming || uploading}
+              canSend={!!input.trim() || !!atts.length}
+              onUpload={() => fileRef.current?.click()}
+              onAssets={() => setAssetOpen(true)}
+              onSkill={() => setSkillOpen(true)}
+              onPasteFiles={onFiles}
+              top={
+                <>
+                  {(!!atts.length || uploading) && (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {atts.map((a, i) => (
+                        <div key={a.path} className="relative">
+                          {a.type.startsWith("image/") ? <img src={a.url} alt={a.name} className="size-14 rounded-lg object-cover" /> : <span className="flex h-14 items-center gap-1 rounded-lg bg-muted px-2 text-xs"><FileText className="size-4" />{a.name.slice(0, 14)}</span>}
+                          <button onClick={() => setAtts((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 grid size-6 place-items-center rounded-full bg-destructive text-destructive-foreground" aria-label="সরান"><X className="size-3" /></button>
+                        </div>
+                      ))}
+                      {uploading && <div className="grid size-14 place-items-center rounded-lg bg-muted"><Loader2 className="size-4 animate-spin text-cyan" /></div>}
+                    </div>
                   )}
-                </PopoverContent>
-              </Popover>
-              <textarea
-                ref={taRef}
-                rows={1}
-                value={input}
-                onChange={(e) => { setInput(e.target.value); autosize(); }}
-                onPaste={(e) => { if (e.clipboardData.files.length) { e.preventDefault(); onFiles(e.clipboardData.files); } }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); }
-                }}
-                placeholder={mode === "plan" ? "কী ধরনের সাইট চান, আলোচনা শুরু করুন..." : "যেমন: আমার কাপড়ের দোকানের ওয়েবসাইট বানাও..."}
-                className="max-h-44 min-h-12 flex-1 resize-none bg-transparent px-2 py-3 text-base outline-none placeholder:text-muted-foreground"
-              />
-              <button onClick={() => send()} disabled={streaming || uploading || (!input.trim() && !atts.length)} className="grid size-12 shrink-0 place-items-center rounded-xl bg-brand disabled:opacity-40" aria-label="পাঠান">
-                {streaming ? <Loader2 className="size-5 animate-spin" /> : <Send className="size-5" />}
-              </button>
-            </div>
-            <p className="mt-1 hidden text-center text-[11px] text-muted-foreground md:block">Ctrl+Enter চেপে পাঠান</p>
+                  {LINK_RE.test(input) && <p className="mb-2 flex items-center gap-1.5 text-xs text-cyan"><Link2 className="size-3" /> লিংকটি AI নিজে খুলে ডিজাইন বিশ্লেষণ করবে</p>}
+                </>
+              }
+            />
           </div>
+          <Dialog open={skillOpen} onOpenChange={setSkillOpen}>
+            <DialogContent><DialogHeader><DialogTitle>সাইটের ধরন বেছে নিন</DialogTitle></DialogHeader><SkillGrid /></DialogContent>
+          </Dialog>
         </section>
 
         <section className="hidden min-h-0 md:block">{preview}</section>
