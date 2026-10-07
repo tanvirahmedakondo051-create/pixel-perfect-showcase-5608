@@ -103,3 +103,17 @@ export async function removeDomains(db: any, domains: string[]) {
   if (!agent) return;
   for (const d of domains) await agentCall(agent, "/remove", { domain: d }).catch((e) => console.error("agent remove", e));
 }
+
+/** Creates the DNS zone for a custom domain on the VPS. "none" = no agent configured. */
+export async function dnsAdd(db: any, domain: string): Promise<"ok" | "error" | "none"> {
+  const agent = await getAgent(db);
+  if (!agent) return "none";
+  try { await agentCall(agent, "/dns-add", { domain }, undefined, 30_000); return "ok"; }
+  catch (e) { console.error("dns add", e); return "error"; }
+}
+
+export async function dnsRemove(db: any, domain: string) {
+  const agent = await getAgent(db);
+  if (!agent) return;
+  await agentCall(agent, "/dns-remove", { domain }, undefined, 30_000).catch((e) => console.error("dns remove", e));
+}

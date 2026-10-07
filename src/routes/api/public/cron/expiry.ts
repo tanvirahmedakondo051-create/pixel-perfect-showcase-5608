@@ -45,6 +45,11 @@ export const Route = createFileRoute("/api/public/cron/expiry")({
           if (st.state === "deleted") {
             for (const p of projects ?? []) {
               if (agent) await removeDomains(db, siteDomains(p, agent.hostingDomain));
+              if (agent && p.custom_domain) {
+                const { dnsRemove } = await import("@/lib/deploy.server");
+                await dnsRemove(db, p.custom_domain);
+                await db.from("projects").update({ dns_status: "none" }).eq("id", p.id);
+              }
               await db.from("project_versions").delete().eq("project_id", p.id);
               const { data: files } = await db.storage.from("uploads").list(p.id, { limit: 1000 });
               if (files?.length) await db.storage.from("uploads").remove(files.map((f) => `${p.id}/${f.name}`));

@@ -193,7 +193,7 @@ function DeployServer({ f, set }: { f: any; set: (k: string) => (e: any) => void
   const [origin, setOrigin] = useState("");
   useEffect(() => { setOrigin(window.location.origin); }, []);
   const host = f.agent_host || "deploy.example.com";
-  const cmd = `curl -fsSL ${origin}/install-agent.sh | sudo HEXA_APP_URL=${origin} bash -s -- ${fresh || "<TOKEN>"} ${host} ${f.support_email || ""} ${f.agent_port || 8443}`.replace(/\s+/g, " ").trim();
+  const cmd = `curl -fsSL ${origin}/install-agent.sh | sudo HEXA_APP_URL=${origin} bash -s -- ${fresh || "<TOKEN>"} ${host} "${f.support_email || ""}" ${f.agent_port || 8443} ${f.ns1 || ""} ${f.ns2 || ""} ${f.server_ip || ""}`.replace(/\s+/g, " ").trim();
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">প্রকাশ বা লাইভ আপডেট চাপলে সাইটটি আপনার VPS এ স্ট্যাটিক ফাইল হিসেবে চলে যাবে (nginx + gzip + ক্যাশ + SSL)। এজেন্টের ঠিকানার DNS আপনার VPS এর IP তে পয়েন্ট করা থাকতে হবে।</p>
@@ -216,6 +216,7 @@ function DeployServer({ f, set }: { f: any; set: (k: string) => (e: any) => void
         </div>
       </Field>
       {!fresh && <p className="text-xs text-muted-foreground">নিরাপত্তার জন্য টোকেন একবারই দেখানো হয়। কমান্ডে টোকেন দেখতে "নতুন টোকেন তৈরি করুন" চাপুন (পুরনো টোকেন বাতিল হবে)।</p>}
+      <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">🌐 অটো DNS: নেমসার্ভার ১/২ ও সার্ভার IP সেভ করে কমান্ডটি আবার চালান — এতে VPS এ DNS সার্ভার চালু হবে এবং কাস্টম ডোমেইনের DNS নিজে থেকে তৈরি হবে। আপনার ডোমেইন রেজিস্ট্রারে ns1/ns2 এর "glue record" VPS IP তে পয়েন্ট করুন।</p>
       <button className={`${btn} min-h-12 border border-border`} onClick={async () => {
         const r = await test();
         if ("error" in r) toast.error(r.error); else toast.success("সার্ভারের সাথে সংযোগ ঠিক আছে ✓");

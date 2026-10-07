@@ -618,6 +618,7 @@ export type Database = {
           deploy_status: string
           deployed_at: string | null
           deployed_url: string | null
+          dns_status: string
           domain_checked_at: string | null
           domain_found_ns: string[]
           domain_status: string
@@ -651,6 +652,7 @@ export type Database = {
           deploy_status?: string
           deployed_at?: string | null
           deployed_url?: string | null
+          dns_status?: string
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string
@@ -684,6 +686,7 @@ export type Database = {
           deploy_status?: string
           deployed_at?: string | null
           deployed_url?: string | null
+          dns_status?: string
           domain_checked_at?: string | null
           domain_found_ns?: string[]
           domain_status?: string

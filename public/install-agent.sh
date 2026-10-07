@@ -1,13 +1,66 @@
 #!/usr/bin/env bash
 # Hexa AI deploy agent installer (Ubuntu/Debian).
-# Usage: curl -fsSL https://YOUR-APP/install-agent.sh | sudo bash -s -- <TOKEN> <AGENT_HOST> [EMAIL] [PORT]
+# Usage: curl -fsSL https://YOUR-APP/install-agent.sh | sudo bash -s -- <TOKEN> <AGENT_HOST> [EMAIL] [PORT] [NS1] [NS2] [SERVER_IP]
 set -euo pipefail
 TOKEN="${1:?token required}"; AGENT_HOST="${2:?agent host required, e.g. deploy.example.com}"; EMAIL="${3:-}"; PORT="${4:-8443}"
+NS1="${5:-}"; NS2="${6:-}"; SERVER_IP="${7:-}"
 SRC="$(dirname "${BASH_SOURCE[0]:-/}")"
 APP_URL="${HEXA_APP_URL:-}"
 
 apt-get update -y
 apt-get install -y nginx certbot curl ca-certificates
+
+# ---- Automatic DNS (PowerDNS, bind-zone backend) ----
+if [ -n "$NS1" ] && [ -n "$NS2" ]; then
+  [ -n "$SERVER_IP" ] || SERVER_IP="$(curl -fsS4 https://api.ipify.org || true)"
+  # Free port 53 from the systemd-resolved stub listener
+  if [ -f /etc/systemd/resolved.conf ]; then
+    sed -i 's/^#\?DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
+    systemctl restart systemd-resolved || true
+    ln -sf /run/systemd/resolve/resolv.conf /etc/resolv.conf
+  fi
+  DEBIAN_FRONTEND=noninteractive apt-get install -y pdns-server pdns-backend-bind
+  mkdir -p /etc/hexa /etc/powerdns/zones
+  touch /etc/powerdns/named.conf
+  printf 'NS1=%s\nNS2=%s\nSERVER_IP=%s\n' "$NS1" "$NS2" "$SERVER_IP" >/etc/hexa/dns.env
+  cat >/etc/powerdns/pdns.d/hexa.conf <<'EOF'
+launch=bind
+bind-config=/etc/powerdns/named.conf
+EOF
+  rm -f /etc/powerdns/pdns.d/bind.conf /etc/powerdns/pdns.d/pdns.simplebind.conf
+  cat >/usr/local/bin/hexa-dns-add <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+D="${1:?domain}"
+[[ "$D" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || { echo "invalid domain"; exit 1; }
+. /etc/hexa/dns.env
+F="/etc/powerdns/zones/db.$D"
+cat >"$F" <<Z
+\$TTL 300
+@   IN SOA $NS1. hostmaster.$D. ( $(date +%s) 3600 600 604800 300 )
+@   IN NS  $NS1.
+@   IN NS  $NS2.
+@   IN A   $SERVER_IP
+www IN A   $SERVER_IP
+Z
+grep -q "\"$D\"" /etc/powerdns/named.conf || echo "zone \"$D\" { type master; file \"$F\"; };" >>/etc/powerdns/named.conf
+systemctl reload pdns 2>/dev/null || systemctl restart pdns
+EOF
+  cat >/usr/local/bin/hexa-dns-remove <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+D="${1:?domain}"
+[[ "$D" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]] || { echo "invalid domain"; exit 1; }
+rm -f "/etc/powerdns/zones/db.$D"
+grep -vF "zone \"$D\" " /etc/powerdns/named.conf >/etc/powerdns/named.conf.tmp || true
+mv /etc/powerdns/named.conf.tmp /etc/powerdns/named.conf
+systemctl reload pdns 2>/dev/null || systemctl restart pdns
+EOF
+  chmod 755 /usr/local/bin/hexa-dns-add /usr/local/bin/hexa-dns-remove
+  systemctl enable --now pdns
+  systemctl restart pdns
+  command -v ufw >/dev/null && ufw allow 53/tcp && ufw allow 53/udp || true
+fi
 if ! command -v node >/dev/null; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
