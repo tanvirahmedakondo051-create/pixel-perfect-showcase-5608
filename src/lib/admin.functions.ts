@@ -182,3 +182,21 @@ export const adminTestAgent = createServerFn({ method: "POST" })
       return { error: "সার্ভারে সংযোগ হয়নি — ঠিকানা, পোর্ট ও SSL যাচাই করুন" };
     }
   });
+
+export const adminGetBackendKey = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const db: any = await adminDb(context);
+    const { data } = await db.from("app_secrets").select("value").eq("name", "backend_master_key").maybeSingle();
+    return { masked: data?.value ? mask(data.value) : "" };
+  });
+
+export const adminSetBackendKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { key: string }) => z.object({ key: z.string().trim().min(8).max(2000) }).parse(d))
+  .handler(async ({ data, context }) => {
+    const db: any = await adminDb(context);
+    const { error } = await db.from("app_secrets").upsert({ name: "backend_master_key", value: data.key, updated_at: new Date().toISOString() });
+    if (error) return { error: "সেভ করা যায়নি" };
+    return { ok: true };
+  });
