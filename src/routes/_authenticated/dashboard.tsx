@@ -7,11 +7,12 @@ import { toast } from "sonner";
 import { Plus, ExternalLink, Copy, Trash2, Globe, FolderOpen, Crown, Zap, Layers } from "lucide-react";
 import { AppHeader, SitePreviewThumb } from "@/components/app/AppHeader";
 import { supabase } from "@/integrations/supabase/client";
-import { bn, bnDate, tokensToday, useProfile, useSession } from "@/lib/auth";
+import { bn, bnDate, useProfile, useSession } from "@/lib/auth";
 import { createProject, recheckMyDomains, setPublished } from "@/lib/user.functions";
 import { DomainStatusBadge } from "@/components/app/DomainDialog";
 import { hostingStatus } from "@/lib/hosting";
 import { Progress } from "@/components/ui/progress";
+import { CoinHistory, CoinIcon, fmtCoins } from "@/components/app/Coins";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -85,9 +86,11 @@ function Dashboard() {
   };
 
   const plan = profile?.plans as { name_bn: string; tokens_per_day: number; price_bdt: number; max_published: number } | null;
-  const used = tokensToday(profile);
-  const limit = plan?.tokens_per_day ?? 50000;
-  const pct = Math.min(100, (used / limit) * 100);
+  const coins = Number((profile as any)?.coins ?? 0);
+  const cap = (plan as any)?.coin_cap ?? 15;
+  const daily = (plan as any)?.daily_coins ?? 1;
+  const pct = Math.min(100, (coins / Math.max(cap, coins, 1)) * 100);
+  const [showHist, setShowHist] = useState(false);
 
   return (
     <div className="min-h-screen">
@@ -168,13 +171,17 @@ function Dashboard() {
 
         <aside className="space-y-4">
           <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-cyan" /> আজকের টোকেন</div>
-            <p className="mt-2 text-lg font-semibold">{bn(used)} / {bn(limit)}</p>
-            <Progress value={pct} className={`mt-2 h-2 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><CoinIcon /> কয়েন ওয়ালেট</div>
+            <p className="mt-2 text-2xl font-bold">🪙 {fmtCoins(coins)} <span className="text-sm font-normal text-muted-foreground">কয়েন</span></p>
+            <Progress value={pct} className={`mt-2 h-2 ${coins < 2 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
+            <p className="mt-2 text-xs text-muted-foreground">প্রতিদিন রাত ১২টায় +{bn(daily)} কয়েন (সর্বোচ্চ {bn(cap)})</p>
+            {coins <= 0 && <p className="mt-2 text-xs text-destructive">🪙 কয়েন শেষ! কাল আবার পাবেন, অথবা <Link to="/pricing" className="font-semibold text-cyan">আপগ্রেড করুন</Link></p>}
+            <button onClick={() => setShowHist((v) => !v)} className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-border text-sm">🪙 হিস্টোরি</button>
+            {showHist && user && <div className="mt-2 max-h-80 overflow-y-auto"><CoinHistory userId={user.id} /></div>
           </div>
           <div className="glass rounded-2xl p-5">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-success" /> সেভ হওয়া টোকেন</div>
-            <p className="mt-2 text-lg font-semibold text-success">{bn(savedTotal ?? 0)}</p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-success" /> সেভ হওয়া কয়েন</div>
+            <p className="mt-2 text-lg font-semibold text-success">{fmtCoins((savedTotal ?? 0) / Math.max(1, (siteSettings as any)?.tokens_per_coin ?? 10000))}</p>
             <p className="text-xs text-muted-foreground">শুধু পরিবর্তিত অংশ লেখায় যা বেঁচেছে</p>
           </div>
           <div className="glass rounded-2xl p-5">
