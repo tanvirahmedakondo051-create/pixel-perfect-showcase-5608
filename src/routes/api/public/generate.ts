@@ -338,8 +338,33 @@ export const Route = createFileRoute("/api/public/generate")({
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
-          async start(controller) {
-            const send = (o: object) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
+          async start(controller0) {
+            // Inner code "closes" freely; the real close happens after job events are saved.
+            const controller = { enqueue: (c: Uint8Array) => controller0.enqueue(c), close: () => {} };
+            const evq: any[] = [];
+            let finalStatus: string | null = null;
+            let lastFlush = 0;
+            let chain: Promise<unknown> = Promise.resolve();
+            const flushJob = (end = false) => {
+              if (!job) return;
+              lastFlush = Date.now();
+              chain = chain.then(async () => {
+                const evs = evq.splice(0);
+                const { data: st } = await db.rpc("job_push" as any, { _id: job.id, _events: evs, _status: end ? (finalStatus ?? "done") : null } as any);
+                if (st === "cancelled") ac.abort();
+              }).catch((e) => console.error("job_push", e));
+            };
+            const send = (o: any) => {
+              try { controller0.enqueue(enc.encode(JSON.stringify(o) + "\n")); } catch { /* runner disconnected */ }
+              if (!job || o.t === "delta") return;
+              if (o.t === "done") finalStatus = "done";
+              else if (o.t === "paused") finalStatus = "paused";
+              else if (o.t === "error") finalStatus = finalStatus ?? "error";
+              evq.push(o);
+              if (["done", "paused", "error", "checkpoint", "files"].includes(o.t) || Date.now() - lastFlush > 1500) flushJob();
+            };
+            try {
+            await (async () => {
             let usedProvider: any = null;
             let baseTokens = 0;
             send({ t: "progress", step: "অনুরোধ বিশ্লেষণ করছি...", tokens: 0 });
@@ -646,6 +671,12 @@ export const Route = createFileRoute("/api/public/generate")({
             send({ t: "done", tokens, html, msg: am, used, limit, saved, savedPct, coins: finalCoins, balance: Math.max(0, coinsLeft), ms: am.ms });
             await finishSummary(newMsgs);
             controller.close();
+            })().catch((e) => { console.error("job run", e); send({ t: "error", msg: "সার্ভারে সমস্যা হয়েছে। আবার চেষ্টা করুন।" }); });
+            } finally {
+              flushJob(true);
+              await chain;
+              controller0.close();
+            }
           },
         });
 
