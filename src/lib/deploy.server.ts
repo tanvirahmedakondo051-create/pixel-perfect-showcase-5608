@@ -19,14 +19,14 @@ function sign(token: string, body: string) {
 }
 
 /** POSTs to the agent and calls onStep for each NDJSON line it streams back. */
-export async function agentCall(agent: Agent, path: string, payload: object, onStep?: (s: { step: string; msg?: string; url?: string; error?: string }) => Promise<void> | void) {
+export async function agentCall(agent: Agent, path: string, payload: object, onStep?: (s: { step: string; msg?: string; url?: string; error?: string }) => Promise<void> | void, timeoutMs = 120_000) {
   const body = JSON.stringify(payload);
   const { ts, sig } = sign(agent.token, body);
   const res = await fetch(agent.url + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Hexa-Timestamp": ts, "X-Hexa-Signature": sig },
     body,
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok || !res.body) throw new Error(`agent ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const reader = res.body.getReader();
