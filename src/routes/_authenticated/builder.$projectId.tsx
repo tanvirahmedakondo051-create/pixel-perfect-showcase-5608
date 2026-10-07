@@ -573,6 +573,7 @@ function Builder() {
               value={input}
               onChange={setInput}
               onSend={() => send()}
+              onStop={() => abortRef.current?.abort()}
               mode={mode}
               onMode={setMode}
               chips={suggestionChips}
@@ -600,6 +601,15 @@ function Builder() {
               }
             />
           </div>
+          <DetailsSheet m={detail} onClose={() => setDetail(null)} onRetry={() => detail && retry(detail)} />
+          <QuestionDialog questions={questions} onCancel={() => { setQuestions(null); confirmCost(); }} onDone={(a) => {
+            setQuestions(null);
+            const p = pendingRef.current;
+            if (p && questions) { const extra = questions.map((q, k) => a[k] ? `- ${q.q}: ${a[k]}` : "").filter(Boolean).join("\n"); if (extra) p.prompt += `\n\nআমার উত্তর:\n${extra}`; }
+            confirmCost();
+          }} />
+          <EstimateDialog est={est} balance={coins} onCancel={() => { setEst(null); const p = pendingRef.current; if (p) setInput(p.prompt); pendingRef.current = null; }} onStart={() => { setEst(null); const p = pendingRef.current; pendingRef.current = null; if (p) exec(p.prompt, p.mode, p.files); }} />
+          <CheckpointsDialog open={cpOpen} onOpenChange={setCpOpen} projectId={projectId} onRollback={(h) => { setHtml(h); qc.invalidateQueries({ queryKey: ["project", projectId] }); }} />
           <Dialog open={skillOpen} onOpenChange={setSkillOpen}>
             <DialogContent><DialogHeader><DialogTitle>সাইটের ধরন বেছে নিন</DialogTitle></DialogHeader><SkillGrid /></DialogContent>
           </Dialog>
