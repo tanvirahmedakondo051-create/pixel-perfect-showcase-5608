@@ -141,17 +141,17 @@ export const Route = createFileRoute("/api/public/generate")({
         const { relevantContext, outline, applyPatches, DIFF_RULE } = await import("@/lib/context.server");
         const { data: sum } = await db.from("chat_summaries").select("summary_text, up_to_message_id").eq("project_id", project.id).order("up_to_message_id", { ascending: false }).limit(1).maybeSingle();
         const summaryMsg = sum ? [{ role: "system", content: `CHAT SUMMARY SO FAR: ${sum.summary_text}` }] : [];
-        const recent = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
+        const recentHist = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
 
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
-        const recentMsgs = recent.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
+        const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
 
         const planMessages = [
           { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
           ...summaryMsg,
-          ...recent.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
+          ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: body.prompt },
         ];
         const diffMessages = hasSite ? [
