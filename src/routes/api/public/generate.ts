@@ -292,8 +292,18 @@ export const Route = createFileRoute("/api/public/generate")({
           skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;
         }
         const isReact = (project as any).project_type === "react";
-        const { backendContext, injectBackend } = await import("@/lib/backend.server");
+        const { backendContext, injectBackend, autoSetupBackend, BACKEND_KEYWORDS } = await import("@/lib/backend.server");
         const { appOrigin } = await import("@/lib/origin.server");
+        // Auto backend: prompt needs login/booking/orders etc. → set up tables before building (first step only).
+        if (job && !isPlan && body.intent !== "ask" && !resumeCp && !(project as any).backend_enabled && BACKEND_KEYWORDS.test(prompt)) {
+          try {
+            await db.rpc("job_push" as any, { _id: job.id, _events: [{ t: "progress", step: "ডেটাবেস সেট আপ করছি...", tokens: 0 }], _status: "running" } as any);
+            const r = await autoSetupBackend(db, project, user.id, prompt, ordered, tpc);
+            (project as any).backend_enabled = true;
+            const msg = r.created.length ? `⚡ ডেটাবেস চালু — টেবিল: ${r.created.join(", ")}` : `⚡ ${r.warning ?? "ডেটাবেস চালু হয়েছে"}`;
+            await db.rpc("job_push" as any, { _id: job.id, _events: [{ t: "notice", msg }], _status: "running" } as any);
+          } catch (e) { console.error("[auto-backend]", e); }
+        }
         const beCtx = (project as any).backend_enabled ? await backendContext(db, project.id, isReact) : "";
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + freeAssets + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
