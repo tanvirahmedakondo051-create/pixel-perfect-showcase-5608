@@ -317,23 +317,32 @@ export const Route = createFileRoute("/api/public/generate")({
               } catch (e) { console.error("summary", e); }
             };
 
-            const charge = async (tokens: number, saved: number) => {
+            let coinsLeft = coinsBefore;
+            let chargedCoins = 0;
+            const charge = async (tokens: number, saved: number, reason?: string) => {
               const coins = Math.round((tokens / tpc) * 100) / 100;
+              coinsLeft -= coins; chargedCoins += coins; used += tokens;
               await Promise.all([
-                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: (isPlan ? "পরিকল্পনা: " : "ওয়েবসাইট: ") + body.prompt.slice(0, 60) } as any) : null,
-                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name, tokens_saved: saved } as any),
-                db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
+                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: reason ?? ((isPlan ? "পরিকল্পনা: " : "ওয়েবসাইট: ") + prompt.slice(0, 60)) } as any) : null,
+                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider?.name ?? null, tokens_saved: saved } as any),
+                db.from("profiles").update({ tokens_used_today: used, last_reset_date: today }).eq("id", user.id),
               ]);
+              return coins;
             };
+            const mid = () => crypto.randomUUID();
+            const r2 = (n: number) => Math.round(n * 100) / 100;
+            const userMsg = (): Msg => ({ role: "user", content: prompt, at: new Date().toISOString(), mode: body.mode, id: mid(), files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) });
 
             if (isPlan) {
               const r = await run(planMessages, true);
               if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
               const now = new Date().toISOString();
               const reply = r.full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
-              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any, { role: "assistant", content: reply, at: now, mode: "plan" }];
+              const coins = r2(r.tokens / tpc);
+              const am: Msg = { role: "assistant", content: reply, at: now, mode: "plan", id: mid(), ms: Date.now() - startedAt, coins, title: "প্ল্যান: " + prompt.slice(0, 40) };
+              const newMsgs: Msg[] = [...history, userMsg(), am];
               await Promise.all([db.from("projects").update({ messages: newMsgs }).eq("id", project.id), charge(r.tokens, 0)]);
-              send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit, coins: Math.round((r.tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - r.tokens / tpc), ms: Date.now() - startedAt });
+              send({ t: "done", tokens: r.tokens, html: "", plan: reply, msg: am, used, limit, coins, balance: Math.max(0, coinsLeft), ms: am.ms });
               await finishSummary(newMsgs);
               return controller.close();
             }
@@ -341,7 +350,84 @@ export const Route = createFileRoute("/api/public/generate")({
             let html = "";
             let tokens = 0;
             let saved = 0;
-            if (diffMessages) {
+            let baseHistory: Msg[] = history;
+
+            // ---- Staged build (new site or resume): section by section with checkpoints ----
+            if (resumeCp || !project.code_html) {
+              let steps: Step[]; let done: Step[] = []; let partial = ""; let taskId: string;
+              if (resumeCp) {
+                done = (resumeCp.completed_steps as Step[]) ?? [];
+                steps = [...done, ...((resumeCp.pending_steps as Step[]) ?? [])];
+                partial = resumeCp.partial_html ?? "";
+                taskId = resumeCp.task_id;
+                baseHistory = history.map((m) => (m.kind === "paused" && m.checkpointId === resumeCp.id ? { ...m, resumed: true } : m));
+                await db.from("task_checkpoints").update({ status: "resumed" }).eq("id", resumeCp.id);
+              } else {
+                baseHistory = [...history, userMsg()];
+                send({ t: "progress", step: "পেজের গঠন ঠিক করছি...", tokens: 0 });
+                const r = await run([{ role: "system", content: OUTLINE_SYS + skillCtx }, ...summaryMsg, { role: "user", content: withExtra(prompt) }], false);
+                if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
+                tokens += r.tokens; baseTokens = tokens;
+                await charge(r.tokens, 0, "গঠন পরিকল্পনা: " + prompt.slice(0, 50));
+                steps = parseSteps(r.full);
+                taskId = mid();
+              }
+              const titles = steps.map((s) => s.title);
+              const total = steps.length;
+              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").slice(0, 7000);
+              let lastCp: string | null = resumeCp?.id ?? null;
+              const savePause = async () => {
+                const pct = Math.round((done.length / total) * 100);
+                const { data: cp } = await db.from("task_checkpoints").insert({ project_id: project.id, user_id: user.id, task_id: taskId, progress_percent: pct, completed_steps: done, pending_steps: steps.slice(done.length), partial_html: partial, prompt, status: "paused" } as any).select("id").single();
+                const pm: Msg = { role: "assistant", kind: "paused", content: `⏸️ ${pct}% সম্পূর্ণ — ${done.length}টি অংশ হয়েছে, ${total - done.length}টি বাকি`, at: new Date().toISOString(), mode: "build", id: mid(), ms: Date.now() - startedAt, coins: r2(chargedCoins), title: "কাজ থেমে আছে", checkpointId: cp?.id, percent: pct, doneTitles: done.map((s) => s.title), leftTitles: steps.slice(done.length).map((s) => s.title) };
+                const msgs = [...baseHistory, pm];
+                const upd: any = { messages: msgs };
+                if (partial) upd.code_html = partial.replace(MARK, "");
+                if (project.name === "নতুন প্রজেক্ট" && !history.length) upd.name = prompt.slice(0, 40);
+                await db.from("projects").update(upd).eq("id", project.id);
+                return pm;
+              };
+              for (let i = done.length; i < total; i++) {
+                if (coinsLeft <= 0) {
+                  const pm = await savePause();
+                  send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: 0, coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens });
+                  return controller.close();
+                }
+                const s = steps[i];
+                send({ t: "progress", step: `${s.title} বানাচ্ছি... (${i + 1}/${total})`, tokens, steps: titles, stepIndex: i });
+                let r: { full: string; tokens: number } | null;
+                if (!partial) {
+                  r = await run([
+                    { role: "system", content: buildSystem },
+                    { role: "user", content: withExtra(`Website request: ${prompt}\n\nFull plan of sections: ${steps.map((x) => `${x.title} (${x.brief})`).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this section inside <body>: ${s.title} — ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
+                  ], true);
+                  if (r) { const h = extractHtml(r.full); if (/<body/i.test(h)) partial = h.includes(MARK) ? h : h.replace(/<\/body>/i, `${MARK}\n</body>`); }
+                } else {
+                  r = await run([
+                    { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + `\n\nOUTPUT RULE: Output ONLY the raw HTML fragment for ONE section (e.g. a <section> or <footer>). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>.` },
+                    { role: "user", content: `Existing <head>:\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY this section: ${s.title} — ${s.brief}` },
+                  ], true);
+                  if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
+                }
+                if (!r || !partial || request.signal.aborted) {
+                  if (done.length || resumeCp) {
+                    const pm = await savePause();
+                    if (!request.signal.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
+                  } else if (!request.signal.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
+                  return controller.close();
+                }
+                tokens += r.tokens; baseTokens = tokens;
+                await charge(r.tokens, 0, `ওয়েবসাইট (${s.title}): ` + prompt.slice(0, 40));
+                done.push(s);
+                const pct = Math.round((done.length / total) * 100);
+                const clean = partial.replace(MARK, "");
+                const { data: cp } = await db.from("task_checkpoints").insert({ project_id: project.id, user_id: user.id, task_id: taskId, progress_percent: pct, completed_steps: done, pending_steps: steps.slice(done.length), partial_html: partial, prompt, status: done.length === total ? "done" : "running" } as any).select("id").single();
+                lastCp = cp?.id ?? lastCp;
+                await db.from("projects").update({ code_html: clean }).eq("id", project.id);
+                send({ t: "checkpoint", id: lastCp, percent: pct, done: done.length, total, html: clean });
+              }
+              html = partial.replace(MARK, "");
+            } else if (diffMessages) {
               send({ t: "notice-soft", msg: "শুধু পরিবর্তিত অংশ লেখা হচ্ছে..." });
               const r = await run(diffMessages, true);
               if (r) {
@@ -357,7 +443,7 @@ export const Route = createFileRoute("/api/public/generate")({
                 }
               }
             }
-            if (!html) {
+            if (!html && !resumeCp && project.code_html) {
               const r = await run(fullMessages, true);
               if (!r && !tokens) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
               if (r) { tokens += r.tokens; html = extractHtml(r.full); }
@@ -369,22 +455,21 @@ export const Route = createFileRoute("/api/public/generate")({
 
             const { data: kws } = await db.from("flag_keywords").select("keyword");
             const lower = html.toLowerCase();
-            const hit = (kws ?? []).find((k) => lower.includes(k.keyword.toLowerCase()) || body.prompt.toLowerCase().includes(k.keyword.toLowerCase()));
+            const hit = (kws ?? []).find((k) => lower.includes(k.keyword.toLowerCase()) || prompt.toLowerCase().includes(k.keyword.toLowerCase()));
 
             const now = new Date().toISOString();
-            const newMsgs: Msg[] = [
-              ...history,
-              { role: "user", content: body.prompt, at: now, mode: "build", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any,
-              { role: "assistant", content: html ? (saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
-            ];
+            const unpaid = Math.max(0, tokens - Math.round(chargedCoins * tpc));
+            const finalCoins = r2(chargedCoins + unpaid / tpc);
+            const am: Msg = { role: "assistant", content: html ? (resumeCp ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
+            const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
             if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
-            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = body.prompt.slice(0, 40);
+            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);
 
-            await Promise.all([db.from("projects").update(update).eq("id", project.id), charge(tokens, saved)]);
+            await Promise.all([db.from("projects").update(update).eq("id", project.id), unpaid > 0 ? charge(unpaid, saved) : null]);
             const savedPct = saved ? Math.round((saved / (saved + tokens)) * 100) : 0;
-            send({ t: "done", tokens, html, used: used + tokens, limit, saved, savedPct, coins: Math.round((tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - tokens / tpc), ms: Date.now() - startedAt });
+            send({ t: "done", tokens, html, msg: am, used, limit, saved, savedPct, coins: finalCoins, balance: Math.max(0, coinsLeft), ms: am.ms });
             await finishSummary(newMsgs);
             controller.close();
           },
