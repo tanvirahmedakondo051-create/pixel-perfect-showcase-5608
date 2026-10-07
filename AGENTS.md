@@ -11,3 +11,6 @@
 - Published sites are served as raw cached HTML from server routes (`/s/$subdomain`, `/api/public/site` keyed by `X-Hexa-Host`) via `src/lib/site-render.server.ts` — fast, no app shell, and lets the admin's VPS nginx proxy/caches by domain.
 - AuraPay requests follow the official plugin format (`API-KEY` header, `cus_name/cus_email/success_url`, verify by `transaction_id`, our row id in `metadata.payment_id`) — the only format AuraPay accepts.
 - Custom domain status is written only by server functions after a DNS-over-HTTPS NS check against admin nameservers — a DB trigger blocks direct user writes.
+- Live sites render `projects.published_html` (snapshot written only by server fns via `publish.server.ts` with a `project_versions` row); builder edits change `code_html` and bump `changes_since_publish` until "লাইভ আপডেট" — keeps half-finished edits off live sites.
+- GitHub uses the per-user App User Connector (connectorId "github"); each user's connection key is AES-GCM encrypted in `github_connections` and only used server-side in `github.functions.ts`.
+- Builder chat has plan/build modes; plan replies are stored in `messages` with `mode:"plan"` and never touch `code_html`; prompts live in `site_settings.plan_prompt/build_prompt`.
