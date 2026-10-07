@@ -248,7 +248,10 @@ function Builder() {
         return;
       }
       try {
-        const r = await pollJob({ data: { jobId, after } });
+        const { data: { session: ss } } = await supabase.auth.getSession();
+        const pr = await fetch(`/api/public/job-status?id=${jobId}&after=${after}`, { headers: { authorization: `Bearer ${ss?.access_token ?? ""}` }, cache: "no-store" });
+        if (!pr.ok) throw new Error("poll");
+        const r: { status: string; events: any[]; total: number } = await pr.json();
         if (r.events.length) {
           lastEvent = Date.now();
           r.events.forEach(handle);
