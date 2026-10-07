@@ -481,18 +481,20 @@ export const Route = createFileRoute("/api/public/generate")({
                 baseHistory = history.map((m) => (m.kind === "paused" && m.checkpointId === resumeCp.id ? { ...m, resumed: true } : m));
                 await db.from("task_checkpoints").update({ status: "resumed" }).eq("id", resumeCp.id);
               } else {
+                // No separate outline call: steps are decided locally (1 step for simple sites, 2 grouped steps otherwise).
                 baseHistory = [...history, userMsg()];
-                send({ t: "progress", step: "পেজের গঠন ঠিক করছি...", tokens: 0 });
-                const r = await run([{ role: "system", content: OUTLINE_SYS + skillCtx }, ...summaryMsg, { role: "user", content: withExtra(prompt) }], false);
-                if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
-                tokens += r.tokens; baseTokens = tokens;
-                await charge(r.tokens, 0, "গঠন পরিকল্পনা: " + prompt.slice(0, 50));
-                steps = parseSteps(r.full);
+                const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length > 500;
+                steps = complex
+                  ? [
+                      { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "navigation header, hero, and the 2-3 most important content sections for this request" },
+                      { id: "rest", title: "বাকি অংশ ও ফুটার", brief: "remaining relevant sections (e.g. testimonials/gallery/contact form) and the footer" },
+                    ]
+                  : [{ id: "all", title: "সম্পূর্ণ ওয়েবসাইট", brief: "the COMPLETE one-page site: header/nav, hero, 3-4 relevant content sections, contact, footer" }];
                 taskId = mid();
               }
               const titles = steps.map((s) => s.title);
               const total = steps.length;
-              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").slice(0, 7000);
+              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s+/g, " ").slice(0, 3500);
               let lastCp: string | null = resumeCp?.id ?? null;
               const savePause = async () => {
                 const pct = Math.round((done.length / total) * 100);
@@ -515,15 +517,18 @@ export const Route = createFileRoute("/api/public/generate")({
                 send({ t: "progress", step: `${s.title} বানাচ্ছি... (${i + 1}/${total})`, tokens, steps: titles, stepIndex: i });
                 let r: { full: string; tokens: number } | null;
                 if (!partial) {
+                  const one = total === 1;
                   r = await run([
-                    { role: "system", content: buildSystem },
-                    { role: "user", content: withExtra(`Website request: ${prompt}\n\nFull plan of sections: ${steps.map((x) => `${x.title} (${x.brief})`).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this section inside <body>: ${s.title} — ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
+                    { role: "system", content: buildSystem + EFFICIENT },
+                    { role: "user", content: withExtra(one
+                      ? `Website request: ${prompt}\n\nWrite the complete website in one HTML document: ${s.brief}.`
+                      : `Website request: ${prompt}\n\nFull plan: ${steps.map((x) => x.brief).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this part inside <body>: ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
                   ], true);
                   if (r) { const h = extractHtml(r.full); if (/<body/i.test(h)) partial = h.includes(MARK) ? h : h.replace(/<\/body>/i, `${MARK}\n</body>`); }
                 } else {
                   r = await run([
-                    { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + `\n\nOUTPUT RULE: Output ONLY the raw HTML fragment for ONE section (e.g. a <section> or <footer>). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>.` },
-                    { role: "user", content: `Existing <head>:\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY this section: ${s.title} — ${s.brief}` },
+                    { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first.` + EFFICIENT },
+                    { role: "user", content: `Existing <head> (styles):\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY: ${s.brief}` },
                   ], true);
                   if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }
