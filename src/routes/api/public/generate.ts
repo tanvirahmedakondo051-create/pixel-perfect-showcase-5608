@@ -183,19 +183,19 @@ export const Route = createFileRoute("/api/public/generate")({
           db.from("site_settings").select("*").eq("id", 1).single(),
           db.from("projects").select("*").eq("id", body.projectId).single(),
         ]);
-        if (!profile || !settings) return json(500, "সার্ভারে সমস্যা হয়েছে");
-        if (!project || project.user_id !== user.id) return json(404, "প্রজেক্ট পাওয়া যায়নি");
-        if (profile.is_banned) return json(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
+        if (!profile || !settings) return failJob(500, "সার্ভারে সমস্যা হয়েছে");
+        if (!project || project.user_id !== user.id) return failJob(404, "প্রজেক্ট পাওয়া যায়নি");
+        if (profile.is_banned) return failJob(403, "আপনার অ্যাকাউন্ট স্থগিত করা হয়েছে");
         let resumeCp: any = null;
         if (body.resumeId) {
           const { data } = await db.from("task_checkpoints" as any).select("*").eq("id", body.resumeId).maybeSingle();
-          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return json(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
+          if (!data || (data as any).user_id !== user.id || (data as any).project_id !== project.id || (data as any).status !== "paused") return failJob(400, "এই চেকপয়েন্ট থেকে আর চালু করা যাবে না");
           resumeCp = data;
           body.mode = "build";
         }
         const prompt: string = resumeCp ? resumeCp.prompt : body.prompt;
-        if (!prompt.trim()) return json(400, "অনুরোধটি সঠিক নয়");
-        if (settings.require_email_verify && !user.email_confirmed_at) return json(403, "আগে ইমেইল ভেরিফাই করুন");
+        if (!prompt.trim()) return failJob(400, "অনুরোধটি সঠিক নয়");
+        if (settings.require_email_verify && !user.email_confirmed_at) return failJob(403, "আগে ইমেইল ভেরিফাই করুন");
 
         const today = dhakaToday();
         let used = profile.tokens_used_today;
@@ -206,15 +206,15 @@ export const Route = createFileRoute("/api/public/generate")({
         const limit = (profile.plans as any)?.tokens_per_day ?? 50000;
         const tpc = Math.max(1, (settings as any).tokens_per_coin ?? 10000);
         const coinsBefore = Number((profile as any).coins ?? 0);
-        if (coinsBefore <= 0) return json(402, "COINS_OUT");
+        if (coinsBefore <= 0) return failJob(402, "COINS_OUT");
         const startedAt = Date.now();
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return json(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return failJob(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
         const providers = await allowedProviders(db, profile.plans);
-        if (!providers?.length) return json(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
+        if (!providers?.length) return failJob(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
         const ordered = body.providerId
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
@@ -300,7 +300,7 @@ export const Route = createFileRoute("/api/public/generate")({
           for (const p of ordered) {
             try {
               const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
-                method: "POST", signal: request.signal,
+                method: "POST", signal: sig,
                 headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
                 body: JSON.stringify({ model: p.model, stream: false, max_tokens: 600, temperature: 0.3, messages: [{ role: "system", content: sys + skillCtx.slice(0, 1500) }, { role: "user", content: prompt }] }),
               });
@@ -317,7 +317,7 @@ export const Route = createFileRoute("/api/public/generate")({
               try { qs = JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)).questions ?? []; } catch { /* none */ }
               const questions = qs.filter((q) => q?.q).slice(0, 3).map((q) => ({ q: String(q.q).slice(0, 200), options: (Array.isArray(q.options) ? q.options : []).slice(0, 4).map((o: any) => String(o).slice(0, 60)) }));
               return Response.json({ questions, coins });
-            } catch { if (request.signal.aborted) break; }
+            } catch { if (sig.aborted) break; }
           }
           return Response.json({ questions: [] });
         }
@@ -339,14 +339,14 @@ export const Route = createFileRoute("/api/public/generate")({
                 try {
                   const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
                     method: "POST",
-                    signal: request.signal,
+                    signal: sig,
                     headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
                     body: JSON.stringify({ model: p.model, messages, stream: true, stream_options: { include_usage: true }, max_tokens: Math.min(p.max_tokens, settings.max_output_tokens), temperature: p.temperature }),
                   });
                   if (r.ok && r.body) { res = r; usedProvider = p; break; }
                   console.error("provider failed", p.name, r.status, (await r.text()).slice(0, 300));
                 } catch (e) {
-                  if (request.signal.aborted) return null;
+                  if (sig.aborted) return null;
                   console.error("provider error", p.name, e);
                 }
               }
@@ -385,7 +385,7 @@ export const Route = createFileRoute("/api/public/generate")({
                   }
                 }
               } catch (e) {
-                if (!request.signal.aborted) console.error("stream read", e);
+                if (!sig.aborted) console.error("stream read", e);
               }
               if (!tokens) tokens = Math.ceil((JSON.stringify(messages).length + full.length) / 4);
               return { full, tokens };
@@ -565,11 +565,11 @@ export const Route = createFileRoute("/api/public/generate")({
                   ], true);
                   if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }
-                if (!r || !partial || request.signal.aborted) {
+                if (!r || !partial || sig.aborted) {
                   if (done.length || resumeCp) {
                     const pm = await savePause();
-                    if (!request.signal.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
-                  } else if (!request.signal.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
+                    if (!sig.aborted) send({ t: "paused", msg: pm, html: partial.replace(MARK, ""), balance: Math.max(0, coinsLeft), coins: r2(chargedCoins), ms: Date.now() - startedAt, tokens, error: "AI সাড়া দেয়নি — চেকপয়েন্ট থেকে আবার চালু করুন" });
+                  } else if (!sig.aborted) send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। আবার চেষ্টা করুন।" });
                   return controller.close();
                 }
                 tokens += r.tokens; baseTokens = tokens;
