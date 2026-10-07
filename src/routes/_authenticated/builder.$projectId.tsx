@@ -279,6 +279,7 @@ function Builder() {
   const preview = (
     <div className="flex h-full flex-col">
       {toolbar}
+      {published.on && <DeployStatus p={project as any} />}
       {published.on && published.sub && (
         <a href={`/s/${published.sub}`} target="_blank" rel="noreferrer" className="truncate border-b border-border px-3 py-1.5 font-en text-xs text-cyan">/s/{published.sub}</a>
       )}
@@ -465,6 +466,22 @@ function Builder() {
           <Eye className="size-4" /> প্রিভিউ
         </button>
       )}
+    </div>
+  );
+}
+
+const STEPS = ["uploading", "nginx", "ssl", "live"] as const;
+function DeployStatus({ p }: { p: { deploy_status?: string; deploy_message?: string; deployed_url?: string | null } | undefined }) {
+  const st = p?.deploy_status ?? "none";
+  if (!p || st === "none") return null;
+  const idx = STEPS.indexOf(st as any);
+  const busy = idx >= 0 && idx < 3;
+  return (
+    <div className={`flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs ${st === "error" ? "text-destructive" : st === "live" ? "text-success" : "text-cyan"}`}>
+      {busy ? <Loader2 className="size-3 animate-spin" /> : <Server className="size-3" />}
+      {busy && <span className="hidden sm:inline">{["আপলোড", "সার্ভার", "SSL", "লাইভ"].map((l, i) => <span key={l} className={i <= idx ? "" : "opacity-40"}>{l}{i < 3 ? " → " : ""}</span>)}</span>}
+      <span className="truncate">{st === "notice" ? "মেয়াদ শেষ — নোটিশ পেজ দেখাচ্ছে" : st === "offline" ? "সাইট বন্ধ (মেয়াদ শেষ)" : p.deploy_message}</span>
+      {st === "live" && p.deployed_url && <a href={p.deployed_url} target="_blank" rel="noreferrer" className="ml-auto truncate font-en underline">{p.deployed_url.replace(/^https?:\/\//, "")}</a>}
     </div>
   );
 }
