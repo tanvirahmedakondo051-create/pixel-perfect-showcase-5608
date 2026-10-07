@@ -18,9 +18,15 @@ FORMAT: Reply in Bangla. When you ask a question, put each quick-tap option on i
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
 const MARK = "<!--HEXA:NEXT-->";
-const EFFICIENT = `
+const PREMIUM = `
 
-EFFICIENCY: Write compact code — use Tailwind CDN utility classes or short shared CSS, no repeated inline styles, no comments, no lorem filler, no inline base64 images, no huge SVG paths (use icon fonts/CDN icons). Keep the whole page well under 25KB.`;
+PREMIUM QUALITY (TOP PRIORITY — never trade quality for brevity):
+- Lovable-level, professional, detailed and rich. NEVER minimal, bare or skeletal.
+- Premium hero: strong headline, supporting text, clear CTA buttons, soft gradient/mesh or layered background, staggered entrance animations.
+- 6-8 rich sections with real Bangla content depth (no 2-line filler): e.g. services/features with details, stats/numbers, process steps, showcase/gallery, testimonials, FAQ, contact form — vary layouts (grids, split, bento, timeline).
+- Smooth scroll-reveal animations (IntersectionObserver), hover lift/glow on cards and buttons, smooth scrolling, sticky blurred header with mobile menu.
+- Professional typography scale, generous spacing, consistent color system, icons, badges, dividers, styled footer with links.
+- Complete, polished code; no placeholders, no lorem ipsum, no inline base64 images.`;
 function cleanFrag(t: string) {
   let s = t.trim();
   const f = s.match(/```[a-zA-Z]*\s*([\s\S]*?)(```|$)/);
@@ -51,7 +57,7 @@ REACT + VITE PROJECT — STRICT OUTPUT RULE (MUST FOLLOW):
 - Output a JSON object with files array: {"files": [{"path": "src/App.tsx", "content": "..."}]}. Output ONLY this JSON, no markdown fences, no explanation.
 - Include package.json (scripts.build = "vite build"; deps: react, react-dom; devDeps: vite, @vitejs/plugin-react, typescript, tailwindcss@3, postcss, autoprefixer), vite.config.ts, tailwind.config.js, postcss.config.js, tsconfig.json, index.html, src/main.tsx, src/index.css and all other src files.
 - Complete working code, no placeholders, no TODOs. NEVER output a single HTML file. Do not use react-router (use simple state-based sections or hash links). No images from local paths; use https URLs.
-- Keep the total output compact (prefer fewer, well-organized files).
+- Complete, polished, professional UI with animations and rich content; never minimal.
 STYLE INSPIRATION: If the user provides an analyzed website, use its colors, fonts and layout as inspiration but create ORIGINAL content.`;
 
 function parseFiles(text: string): { path: string; content: string }[] | null {
@@ -475,18 +481,19 @@ export const Route = createFileRoute("/api/public/generate")({
               } else {
                 // No separate outline call: steps are decided locally (1 step for simple sites, 2 grouped steps otherwise).
                 baseHistory = [...history, userMsg()];
-                const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length > 500;
+                const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length >= 120;
                 steps = complex
                   ? [
-                      { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "navigation header, hero, and the 2-3 most important content sections for this request" },
-                      { id: "rest", title: "বাকি অংশ ও ফুটার", brief: "remaining relevant sections (e.g. testimonials/gallery/contact form) and the footer" },
+                      { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "sticky navigation header with mobile menu, a premium animated hero, and the 2 most important content sections, each with full content depth" },
+                      { id: "mid", title: "মাঝের অংশগুলো", brief: "2-3 rich middle sections (e.g. stats, process steps, showcase/gallery, pricing) with varied layouts and hover/scroll animations" },
+                      { id: "rest", title: "রিভিউ, FAQ, যোগাযোগ ও ফুটার", brief: "testimonials, FAQ, a styled contact section/form, and a rich footer" },
                     ]
-                  : [{ id: "all", title: "সম্পূর্ণ ওয়েবসাইট", brief: "the COMPLETE one-page site: header/nav, hero, 3-4 relevant content sections, contact, footer" }];
+                  : [{ id: "all", title: "সম্পূর্ণ ওয়েবসাইট", brief: "the COMPLETE rich one-page site: sticky header/nav with mobile menu, premium animated hero, 6-8 detailed content sections (features, stats, process, showcase, testimonials, FAQ), contact, rich footer" }];
                 taskId = mid();
               }
               const titles = steps.map((s) => s.title);
               const total = steps.length;
-              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s+/g, " ").slice(0, 3500);
+              const headOf = (h: string) => (h.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s+/g, " ").slice(0, 12000);
               let lastCp: string | null = resumeCp?.id ?? null;
               const savePause = async () => {
                 const pct = Math.round((done.length / total) * 100);
@@ -511,7 +518,7 @@ export const Route = createFileRoute("/api/public/generate")({
                 if (!partial) {
                   const one = total === 1;
                   r = await run([
-                    { role: "system", content: buildSystem + EFFICIENT },
+                    { role: "system", content: buildSystem + PREMIUM },
                     { role: "user", content: withExtra(one
                       ? `Website request: ${prompt}\n\nWrite the complete website in one HTML document: ${s.brief}.`
                       : `Website request: ${prompt}\n\nFull plan: ${steps.map((x) => x.brief).join("; ")}.\n\nNOW write the complete HTML document (head with all styles/fonts/scripts for the whole site) but include ONLY this part inside <body>: ${s.brief}. Put the exact comment ${MARK} where the remaining sections will be inserted (before the closing scripts/</body>).`) },
@@ -519,7 +526,7 @@ export const Route = createFileRoute("/api/public/generate")({
                   if (r) { const h = extractHtml(r.full); if (/<body/i.test(h)) partial = h.includes(MARK) ? h : h.replace(/<\/body>/i, `${MARK}\n</body>`); }
                 } else {
                   r = await run([
-                    { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first.` + EFFICIENT },
+                    { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first. Match the hero polish: rich content, animations and hover effects.` + PREMIUM },
                     { role: "user", content: `Existing <head> (styles):\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY: ${s.brief}` },
                   ], true);
                   if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
