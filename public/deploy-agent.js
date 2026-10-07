@@ -80,6 +80,58 @@ async function deploy({ domain, html, ssl }, step) {
   return { step: "live", url: `${fs.existsSync(`/etc/letsencrypt/live/${domain}/fullchain.pem`) ? "https" : "http"}://${domain}` };
 }
 
+const BUILD_ROOT = "/var/hexa/projects";
+const BUILD_UID = process.env.HEXA_BUILD_UID ? Number(process.env.HEXA_BUILD_UID) : undefined;
+const BUILD_GID = process.env.HEXA_BUILD_GID ? Number(process.env.HEXA_BUILD_GID) : undefined;
+
+function runBuild(cmd, args, cwd) {
+  return new Promise((resolve, reject) => {
+    const env = { PATH: process.env.PATH, HOME: BUILD_UID !== undefined ? "/home/hexabuild" : process.env.HOME, NODE_ENV: "development", CI: "1" };
+    execFile(cmd, args, { cwd, env, uid: BUILD_UID, gid: BUILD_GID, timeout: 240000, maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+      const out = (String(stdout) + "\n" + String(stderr)).slice(-4000);
+      err ? reject(new Error(out || err.message)) : resolve(out);
+    });
+  });
+}
+
+function chownR(p) {
+  if (BUILD_UID === undefined) return;
+  fs.chownSync(p, BUILD_UID, BUILD_GID);
+  if (fs.statSync(p).isDirectory()) for (const f of fs.readdirSync(p)) chownR(path.join(p, f));
+}
+
+// Builds a React+Vite project and returns dist/ as ONE html file (JS/CSS inlined).
+async function build({ projectId, files }, step) {
+  if (!/^[0-9a-f-]{36}$/.test(projectId)) throw new Error("invalid project");
+  if (!Array.isArray(files) || !files.length || files.length > 200) throw new Error("invalid files");
+  const dir = path.join(BUILD_ROOT, projectId);
+  for (const e of fs.existsSync(dir) ? fs.readdirSync(dir) : []) if (e !== "node_modules") fs.rmSync(path.join(dir, e), { recursive: true, force: true });
+  fs.mkdirSync(dir, { recursive: true });
+  step({ step: "writing" });
+  for (const f of files) {
+    const rel = path.normalize(String(f.path || "")).replace(/^(\.\.(\/|\\|$))+/, "");
+    if (!rel || path.isAbsolute(rel) || rel.startsWith("..") || rel.includes("node_modules")) continue;
+    const full = path.join(dir, rel);
+    if (!full.startsWith(dir + path.sep)) continue;
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, String(f.content ?? ""));
+  }
+  chownR(dir);
+  step({ step: "installing" });
+  try { await runBuild("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund", "--loglevel=error"], dir); }
+  catch (e) { return { step: "failed", phase: "install", log: String(e.message) }; }
+  step({ step: "building" });
+  try { await runBuild("npx", ["--no-install", "vite", "build", "--base", "./"], dir); }
+  catch (e) { return { step: "failed", phase: "build", log: String(e.message) }; }
+  const dist = path.join(dir, "dist");
+  let html = fs.readFileSync(path.join(dist, "index.html"), "utf8");
+  const read = (ref) => { const p = path.join(dist, ref.replace(/^\.?\//, "")); return p.startsWith(dist) && fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null; };
+  html = html.replace(/<script([^>]*?)\ssrc="([^"]+)"([^>]*)><\/script>/g, (m, a, src, b) => { const c = read(src); return c == null ? m : `<script${a}${b}>${c.replace(/<\/script/gi, "<\\/script")}</script>`; });
+  html = html.replace(/<link([^>]*?)rel="stylesheet"([^>]*?)href="([^"]+)"([^>]*)>/g, (m, a, b, href) => { const c = read(href); return c == null ? m : `<style>${c}</style>`; });
+  html = html.replace(/<link[^>]*rel="modulepreload"[^>]*>/g, "");
+  return { step: "ready", html };
+}
+
 async function remove({ domain }, step) {
   if (!DOMAIN_RE.test(domain)) throw new Error("invalid domain");
   fs.rmSync(path.join(ROOT, domain), { recursive: true, force: true });
@@ -93,14 +145,14 @@ async function handler(req, res) {
   if (req.method === "GET" && req.url === "/health") { res.end(JSON.stringify({ ok: true })); return; }
   if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
   let body = "";
-  req.on("data", (c) => { body += c; if (body.length > 6_000_000) req.destroy(); });
+  req.on("data", (c) => { body += c; if (body.length > 12_000_000) req.destroy(); });
   req.on("end", async () => {
     if (!verify(req, body)) { res.statusCode = 401; res.end(JSON.stringify({ error: "unauthorized" })); return; }
     res.writeHead(200, { "Content-Type": "application/x-ndjson" });
     const step = (o) => res.write(JSON.stringify(o) + "\n");
     try {
       const data = JSON.parse(body);
-      const out = req.url === "/deploy" ? await deploy(data, step) : req.url === "/remove" ? await remove(data, step) : (() => { throw new Error("unknown action"); })();
+      const out = req.url === "/deploy" ? await deploy(data, step) : req.url === "/remove" ? await remove(data, step) : req.url === "/build" ? await build(data, step) : (() => { throw new Error("unknown action"); })();
       step(out);
     } catch (e) {
       step({ error: String(e.message || e) });
