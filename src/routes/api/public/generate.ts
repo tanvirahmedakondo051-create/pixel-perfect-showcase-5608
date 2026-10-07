@@ -277,7 +277,7 @@ export const Route = createFileRoute("/api/public/generate")({
               if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
               const now = new Date().toISOString();
               const reply = r.full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
-              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan" }, { role: "assistant", content: reply, at: now, mode: "plan" }];
+              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any, { role: "assistant", content: reply, at: now, mode: "plan" }];
               await Promise.all([db.from("projects").update({ messages: newMsgs }).eq("id", project.id), charge(r.tokens, 0)]);
               send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit });
               await finishSummary(newMsgs);
@@ -319,7 +319,7 @@ export const Route = createFileRoute("/api/public/generate")({
             const now = new Date().toISOString();
             const newMsgs: Msg[] = [
               ...history,
-              { role: "user", content: body.prompt, at: now, mode: "build" },
+              { role: "user", content: body.prompt, at: now, mode: "build", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any,
               { role: "assistant", content: html ? (saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
             ];
             const update: any = { messages: newMsgs };
