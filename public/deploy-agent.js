@@ -132,6 +132,21 @@ async function build({ projectId, files }, step) {
   return { step: "ready", html };
 }
 
+// DNS zones (PowerDNS bind backend). Helper scripts are installed by install-agent.sh.
+// execFile with an argument list — the domain never touches a shell.
+async function dnsAdd({ domain }, step) {
+  if (typeof domain !== "string" || !DOMAIN_RE.test(domain)) throw new Error("invalid domain");
+  await run("/usr/local/bin/hexa-dns-add", [domain]);
+  step({ step: "dns-zone-created", domain });
+  return { step: "dns-added", domain };
+}
+
+async function dnsRemove({ domain }, step) {
+  if (typeof domain !== "string" || !DOMAIN_RE.test(domain)) throw new Error("invalid domain");
+  await run("/usr/local/bin/hexa-dns-remove", [domain]);
+  return { step: "dns-removed", domain };
+}
+
 async function remove({ domain }, step) {
   if (!DOMAIN_RE.test(domain)) throw new Error("invalid domain");
   fs.rmSync(path.join(ROOT, domain), { recursive: true, force: true });
@@ -152,7 +167,10 @@ async function handler(req, res) {
     const step = (o) => res.write(JSON.stringify(o) + "\n");
     try {
       const data = JSON.parse(body);
-      const out = req.url === "/deploy" ? await deploy(data, step) : req.url === "/remove" ? await remove(data, step) : req.url === "/build" ? await build(data, step) : (() => { throw new Error("unknown action"); })();
+      const routes = { "/deploy": deploy, "/remove": remove, "/build": build, "/dns-add": dnsAdd, "/dns-remove": dnsRemove };
+      const fn = routes[req.url];
+      if (!fn) throw new Error("unknown action");
+      const out = await fn(data, step);
       step(out);
     } catch (e) {
       step({ error: String(e.message || e) });
