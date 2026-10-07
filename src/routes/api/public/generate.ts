@@ -161,13 +161,22 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         const withExtra = (text: string) => (imageParts.length ? [{ type: "text", text: text + extra }, ...imageParts] : text + extra);
 
-        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
+        const [{ data: pack }, { data: analysis }] = await Promise.all([
+          (project as any).skill_pack_id ? db.from("skill_packs").select("name_bn, system_prompt").eq("id", (project as any).skill_pack_id).maybeSingle() : Promise.resolve({ data: null } as any),
+          db.from("project_analysis").select("*").eq("project_id", project.id).maybeSingle(),
+        ]);
+        let skillCtx = pack?.system_prompt ? `\n\n${pack.system_prompt}` : "";
+        if (analysis) {
+          const files = ((analysis.file_map_json as any[]) ?? []).slice(0, 60).map((f) => `- ${f.path} (${f.role})`).join("\n");
+          skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;
+        }
+        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
 
         const planMessages = [
-          { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
+          { role: "system", content: (s2.plan_prompt ?? "") + skillCtx + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
           ...summaryMsg,
           ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
           { role: "user", content: withExtra(body.prompt) },
