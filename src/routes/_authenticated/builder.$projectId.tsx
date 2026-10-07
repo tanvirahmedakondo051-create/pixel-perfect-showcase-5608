@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatComposer, type Chip } from "@/components/app/ChatComposer";
 import { useSkillPacks } from "@/lib/skills";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { uploadChatFile } from "@/lib/upload.functions";
 import { GithubDialog } from "@/components/app/GithubDialog";
 import { VersionsDialog } from "@/components/app/VersionsDialog";
@@ -79,6 +80,7 @@ function Builder() {
   const [verOpen, setVerOpen] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
   const [skillOpen, setSkillOpen] = useState(false);
+  const isMobile = useIsMobile();
   const { data: packs } = useSkillPacks();
   const taRef = useRef<HTMLTextAreaElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -269,6 +271,7 @@ function Builder() {
   const recent = [...new Set(messages.filter((m) => m.role === "user" && m.content.length < 60).map((m) => m.content))].slice(-2).reverse();
   const suggestionChips: Chip[] = [
     ...(html ? [
+      isMobile ? { label: "প্রিভিউ", icon: <Eye className="size-3.5" />, onClick: () => setMobilePreview(true) } : null,
       published.on
         ? (changes > 0 ? { label: "লাইভ আপডেট", icon: <RefreshCw className="size-3.5" />, onClick: runLive } : null)
         : { label: "পাবলিশ করুন", icon: <Globe className="size-3.5" />, onClick: doPublish },
@@ -368,7 +371,7 @@ function Builder() {
       <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-2">
         <Link to="/dashboard" className="grid size-11 place-items-center rounded-lg hover:bg-accent" aria-label="ফিরে যান"><ArrowRight className="size-5" /></Link>
         <span className="grid size-8 place-items-center rounded-lg bg-brand"><Hexagon className="size-4" /></span>
-        <h1 className="line-clamp-1 flex-1 font-semibold">{project?.name}</h1>
+        <h1 className="min-w-0 flex-1 truncate font-semibold">{project?.name}</h1>
         {!!providers?.length && providers.length > 1 && (
           <Select value={providerId} onValueChange={setProviderId}>
             <SelectTrigger className="h-10 w-32 sm:w-44"><SelectValue placeholder="AI" /></SelectTrigger>
@@ -377,24 +380,21 @@ function Builder() {
         )}
       </header>
 
-      <div className="grid min-h-0 flex-1 md:grid-cols-[380px_1fr] lg:grid-cols-[420px_1fr]">
-        <section className="flex min-h-0 flex-col border-border md:border-r">
-          <div className="border-b border-border px-4 py-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1 text-muted-foreground"><Zap className="size-3 text-cyan" /> আজ {bn(used)} / {bn(limit)} টোকেন</span>
-              {lastSaved > 0 && <span className="text-success">{bn(lastSaved)}% সেভ 🎉</span>}
-              {pct >= 90 && <Link to="/pricing" className="text-cyan">Pro নিন</Link>}
-            </div>
-            <Progress value={pct} className={`mt-1.5 h-1.5 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
-          </div>
-
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[380px_1fr] lg:grid-cols-[420px_1fr]">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden border-border md:border-r">
           <div className="flex items-center gap-2 border-b border-border px-3 py-1.5 text-xs">
-            <button onClick={() => setSkillOpen(true)} className="flex min-h-9 items-center gap-1.5 rounded-full border border-border px-3 hover:border-cyan">
+            <button onClick={() => setSkillOpen(true)} className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-border px-3 hover:border-cyan">
               <span>{currentPack?.icon ?? "✨"}</span>{currentPack?.name_bn ?? "সাধারণ"}
             </button>
-            {mode === "plan" && <span className="text-cyan">প্ল্যান মোড — সাইট বদলাবে না</span>}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1 text-[11px] text-muted-foreground">
+                <span className="flex min-w-0 items-center gap-1 truncate"><Zap className="size-3 shrink-0 text-cyan" />{bn(used)}/{bn(limit)}</span>
+                {mode === "plan" ? <span className="shrink-0 text-cyan">প্ল্যান মোড</span> : lastSaved > 0 ? <span className="shrink-0 text-success">{bn(lastSaved)}% সেভ</span> : pct >= 90 ? <Link to="/pricing" className="shrink-0 text-cyan">Pro নিন</Link> : null}
+              </div>
+              <Progress value={pct} className={`mt-1 h-1 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
+            </div>
           </div>
-          <div className={`flex-1 space-y-3 overflow-y-auto p-4`}>
+          <div className="min-w-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4">
             {!messages.length && (
               <div className="pt-4 text-center">
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
@@ -403,7 +403,7 @@ function Builder() {
               </div>
             )}
             {messages.map((m, i) => (
-              <div key={i} className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${m.role === "user" ? "ml-auto rounded-br-sm bg-primary text-primary-foreground" : (m as any).kind === "analysis" ? "max-w-full rounded-bl-sm border border-cyan/40 bg-cyan/5" : "rounded-bl-sm bg-muted"}`}>
+              <div key={i} className={`min-w-0 break-words text-[15px] leading-relaxed ${m.role === "user" ? "ml-auto w-fit max-w-[85%] rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-primary-foreground" : (m as any).kind === "analysis" ? "rounded-2xl border border-cyan/40 bg-cyan/5 px-4 py-3" : "max-w-full px-1"}`}>
                 {(m as any).kind === "analysis" ? (
                   <>
                     <div className="whitespace-pre-line">{m.content}</div>
@@ -504,11 +504,6 @@ function Builder() {
       </div>
 
       {mobilePreview && <div className="fixed inset-0 z-50 bg-background md:hidden animate-in slide-in-from-right duration-300">{preview}</div>}
-      {html && !mobilePreview && !streaming && (
-        <button onClick={() => setMobilePreview(true)} className="fixed bottom-28 left-1/2 z-30 flex min-h-12 -translate-x-1/2 items-center gap-2 rounded-full bg-brand px-5 font-semibold shadow-glow md:hidden">
-          <Eye className="size-4" /> প্রিভিউ
-        </button>
-      )}
     </div>
   );
 }

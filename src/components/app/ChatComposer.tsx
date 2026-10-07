@@ -47,18 +47,18 @@ export function ChatComposer(p: Props) {
   };
 
   return (
-    <div>
+    <div className="w-full min-w-0">
       {!!p.chips.length && (
-        <div className="-mx-3 mb-2 flex gap-2 overflow-x-auto px-3 pb-1 [scrollbar-width:none]">
+        <div className="mb-2 flex w-full min-w-0 gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
           {p.chips.map((c, i) => (
-            <button key={i} onClick={c.onClick} disabled={p.busy} className="flex min-h-10 shrink-0 items-center gap-1.5 rounded-full border border-border bg-card/70 px-3.5 text-sm hover:border-cyan disabled:opacity-50">
+            <button key={i} onClick={c.onClick} disabled={p.busy} className="flex min-h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-border bg-card/70 px-4 text-sm hover:border-cyan disabled:opacity-50">
               {c.icon}{c.label}
             </button>
           ))}
         </div>
       )}
       {p.top}
-      <div className="rounded-3xl border border-input bg-card p-2 shadow-lg focus-within:border-cyan/70">
+      <div className="w-full min-w-0 rounded-[28px] border border-input bg-card p-2.5 shadow-lg focus-within:border-cyan/70">
         <textarea
           ref={p.taRef}
           rows={2}
@@ -72,7 +72,7 @@ export function ChatComposer(p: Props) {
         <div className="flex items-center gap-1">
           <Popover open={menu} onOpenChange={setMenu}>
             <PopoverTrigger asChild>
-              <button className="grid size-11 place-items-center rounded-full border border-border hover:bg-accent" aria-label="আরও"><Plus className="size-5" /></button>
+              <button className="grid size-11 shrink-0 place-items-center rounded-full border border-border hover:bg-accent" aria-label="আরও"><Plus className="size-5" /></button>
             </PopoverTrigger>
             <PopoverContent side="top" align="start" className="w-56 p-1">
               {[
@@ -84,10 +84,10 @@ export function ChatComposer(p: Props) {
               ))}
             </PopoverContent>
           </Popover>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className={`flex min-h-11 items-center gap-1 rounded-full px-3 text-sm font-medium hover:bg-accent ${p.mode === "plan" ? "text-cyan" : ""}`}>
+                <button className={`flex min-h-11 shrink-0 items-center gap-1 rounded-full border border-border px-4 text-sm font-medium hover:bg-accent ${p.mode === "plan" ? "text-cyan" : ""}`}>
                   {p.mode === "plan" ? "প্ল্যান" : "বিল্ড"}<ChevronDown className="size-4" />
                 </button>
               </DropdownMenuTrigger>
@@ -100,14 +100,14 @@ export function ChatComposer(p: Props) {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {micOk && (
-              <button onClick={toggleMic} className={`grid size-11 place-items-center rounded-full hover:bg-accent ${listening ? "animate-pulse text-cyan" : ""}`} aria-label="ভয়েস">
+            {micOk && (listening || !p.canSend) && (
+              <button onClick={toggleMic} className={`grid size-11 shrink-0 place-items-center rounded-full border border-border hover:bg-accent ${listening ? "animate-pulse text-cyan" : ""}`} aria-label="ভয়েস">
                 {listening ? <MicOff className="size-5" /> : <Mic className="size-5" />}
               </button>
             )}
-            <button onClick={p.onSend} disabled={p.busy || !p.canSend} className="grid size-11 place-items-center rounded-full bg-foreground text-background disabled:opacity-30" aria-label="পাঠান">
+            {(p.canSend || p.busy || !micOk) && <button onClick={p.onSend} disabled={p.busy || !p.canSend} className="grid size-11 shrink-0 place-items-center rounded-full bg-foreground text-background disabled:opacity-30" aria-label="পাঠান">
               {p.busy ? <Loader2 className="size-5 animate-spin" /> : <ArrowUp className="size-5" />}
-            </button>
+            </button>}
           </div>
         </div>
       </div>
