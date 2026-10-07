@@ -32,6 +32,7 @@ import { Route as ApiPublicAurapayWebhookRouteImport } from './routes/api/public
 import { Route as ApiPublicGenerateRouteImport } from './routes/api/public/generate'
 import { Route as ApiPublicSiteRouteImport } from './routes/api/public/site'
 import { Route as OauthGithubReturnRouteImport } from './routes/oauth.github.return'
+import { Route as UploadsProjectIdFileRouteImport } from './routes/uploads.$projectId.$file'
 import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
 import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 import { Route as ApiPublicCronExpiryRouteImport } from './routes/api/public/cron/expiry'
@@ -158,6 +159,11 @@ const OauthGithubReturnRoute = OauthGithubReturnRouteImport.update({
   path: '/oauth/github/return',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UploadsProjectIdFileRoute = UploadsProjectIdFileRouteImport.update({
+  id: '/uploads/$projectId/$file',
+  path: '/uploads/$projectId/$file',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminPlansIndexRoute =
   AuthenticatedAdminPlansIndexRouteImport.update({
     id: '/plans/',
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
+  '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
@@ -224,6 +231,7 @@ export interface FileRoutesByTo {
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
+  '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
@@ -253,6 +261,7 @@ export interface FileRoutesById {
   '/api/public/generate': typeof ApiPublicGenerateRoute
   '/api/public/site': typeof ApiPublicSiteRoute
   '/oauth/github/return': typeof OauthGithubReturnRoute
+  '/uploads/$projectId/$file': typeof UploadsProjectIdFileRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
@@ -282,6 +291,7 @@ export interface FileRouteTypes {
     | '/api/public/generate'
     | '/api/public/site'
     | '/oauth/github/return'
+    | '/uploads/$projectId/$file'
     | '/admin/'
     | '/admin/plans/$id'
     | '/api/public/cron/expiry'
@@ -308,6 +318,7 @@ export interface FileRouteTypes {
     | '/api/public/generate'
     | '/api/public/site'
     | '/oauth/github/return'
+    | '/uploads/$projectId/$file'
     | '/admin'
     | '/admin/plans/$id'
     | '/api/public/cron/expiry'
@@ -336,6 +347,7 @@ export interface FileRouteTypes {
     | '/api/public/generate'
     | '/api/public/site'
     | '/oauth/github/return'
+    | '/uploads/$projectId/$file'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/plans/$id'
     | '/api/public/cron/expiry'
@@ -354,6 +366,7 @@ export interface RootRouteChildren {
   ApiPublicGenerateRoute: typeof ApiPublicGenerateRoute
   ApiPublicSiteRoute: typeof ApiPublicSiteRoute
   OauthGithubReturnRoute: typeof OauthGithubReturnRoute
+  UploadsProjectIdFileRoute: typeof UploadsProjectIdFileRoute
   ApiPublicCronExpiryRoute: typeof ApiPublicCronExpiryRoute
 }
 
@@ -520,6 +533,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OauthGithubReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/uploads/$projectId/$file': {
+      id: '/uploads/$projectId/$file'
+      path: '/uploads/$projectId/$file'
+      fullPath: '/uploads/$projectId/$file'
+      preLoaderRoute: typeof UploadsProjectIdFileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin/plans/': {
       id: '/_authenticated/admin/plans/'
       path: '/plans'
@@ -602,6 +622,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPublicGenerateRoute: ApiPublicGenerateRoute,
   ApiPublicSiteRoute: ApiPublicSiteRoute,
   OauthGithubReturnRoute: OauthGithubReturnRoute,
+  UploadsProjectIdFileRoute: UploadsProjectIdFileRoute,
   ApiPublicCronExpiryRoute: ApiPublicCronExpiryRoute,
 }
 export const routeTree = rootRouteImport

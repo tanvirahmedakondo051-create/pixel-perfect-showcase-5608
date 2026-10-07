@@ -6,6 +6,7 @@ const Body = z.object({
   prompt: z.string().min(1).max(8000),
   providerId: z.string().uuid().optional().nullable(),
   mode: z.enum(["plan", "build"]).optional().default("build"),
+  attachments: z.array(z.object({ path: z.string().max(200), url: z.string().url().max(400), name: z.string().max(120), type: z.string().max(60) })).max(4).optional().default([]),
 });
 
 const PLAN_FORMAT = `
@@ -143,6 +144,23 @@ export const Route = createFileRoute("/api/public/generate")({
         const summaryMsg = sum ? [{ role: "system", content: `CHAT SUMMARY SO FAR: ${sum.summary_text}` }] : [];
         const recentHist = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
 
+        // Attachments (images go to the AI as vision input) + auto-analyse the first link in the message.
+        const atts = body.attachments.filter((a) => a.path.startsWith(project.id + "/"));
+        const imageParts: any[] = [];
+        for (const a of atts.filter((x) => x.type.startsWith("image/") && x.type !== "image/svg+xml")) {
+          const { data: signed } = await db.storage.from("uploads").createSignedUrl(a.path, 3600);
+          if (signed?.signedUrl) imageParts.push({ type: "image_url", image_url: { url: signed.signedUrl } });
+        }
+        let extra = "";
+        if (atts.length) extra += `\n\nUSER UPLOADED FILES (use these exact URLs in the site when relevant, e.g. as <img src>):\n${atts.map((a) => `- ${a.name} (${a.type}): ${a.url}`).join("\n")}`;
+        const link = body.prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
+        if (link) {
+          const { analyzeUrl, analysisContext } = await import("@/lib/analyze.server");
+          const r = await analyzeUrl(link).catch(() => null);
+          if (r && "ok" in r) extra += "\n\n" + analysisContext(r.analysis);
+        }
+        const withExtra = (text: string) => (imageParts.length ? [{ type: "text", text: text + extra }, ...imageParts] : text + extra);
+
         const buildSystem = (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
@@ -152,19 +170,19 @@ export const Route = createFileRoute("/api/public/generate")({
           { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
           ...summaryMsg,
           ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
-          { role: "user", content: body.prompt },
+          { role: "user", content: withExtra(body.prompt) },
         ];
         const diffMessages = hasSite ? [
           { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: `পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${body.prompt}` },
+          { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${body.prompt}`) },
         ] : null;
         const fullMessages = [
           { role: "system", content: buildSystem },
           ...summaryMsg,
           ...recentMsgs,
-          { role: "user", content: hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : body.prompt },
+          { role: "user", content: withExtra(hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : body.prompt) },
         ];
 
         const enc = new TextEncoder();
