@@ -66,6 +66,11 @@ export const setPublished = createServerFn({ method: "POST" })
     const subdomain = proj.subdomain ?? slug(proj.name);
     const { error } = await supabaseAdmin.from("projects").update({ is_published: true, subdomain, show_badge: prof?.plans?.show_badge ?? true }).eq("id", data.id);
     if (error) return { error: "প্রকাশ করা যায়নি" };
+    const { data: full } = await supabaseAdmin.from("projects").select("id, published_html, published_version").eq("id", data.id).single();
+    const { pushLive, hashHtml } = await import("./publish.server");
+    if (full && (!full.published_html || hashHtml(full.published_html) !== hashHtml(proj.code_html))) {
+      await pushLive(supabaseAdmin, userId, full as any, proj.code_html);
+    }
     return { ok: true as const, subdomain };
   });
 
