@@ -60,7 +60,8 @@ const REACT_RULE = `
 
 REACT + VITE PROJECT — STRICT OUTPUT RULE (MUST FOLLOW):
 - Output a JSON object with files array: {"files": [{"path": "src/App.tsx", "content": "..."}]}. Output ONLY this JSON, no markdown fences, no explanation.
-- Include package.json (scripts.build = "vite build"; deps: react, react-dom; devDeps: vite, @vitejs/plugin-react, typescript, tailwindcss@3, postcss, autoprefixer), vite.config.ts, tailwind.config.js, postcss.config.js, tsconfig.json, index.html, src/main.tsx, src/index.css and all other src files.
+- Include package.json (scripts.build = "vite build"; deps: react, react-dom, framer-motion; devDeps: vite, @vitejs/plugin-react, typescript, tailwindcss@3, postcss, autoprefixer), vite.config.ts, tailwind.config.js, postcss.config.js, tsconfig.json, index.html, src/main.tsx, src/index.css and all other src files.
+- ANIMATION with framer-motion (import { motion, AnimatePresence, useReducedMotion } from "framer-motion"): scroll-reveal sections with initial={{opacity:0,y:24}} whileInView={{opacity:1,y:0}} viewport={{ once: true, amount: 0.2 }}; stagger lists/cards via parent variants (staggerChildren 0.08-0.12); whileHover (y:-6 / scale 1.02) and whileTap (scale 0.97) on buttons and cards; wrap section/view switches in <AnimatePresence mode="wait"> with fade/slide transitions; call useReducedMotion() and skip movement (opacity only or none) when true. Animate only transform/opacity.
 - Complete working code, no placeholders, no TODOs. NEVER output a single HTML file. Do not use react-router (use simple state-based sections or hash links). No images from local paths; use https URLs.
 - Complete, polished, professional UI with animations and rich content; never minimal.
 - Hero background MUST be an animated mesh/gradient (slow drifting blurred radial blobs or background-position shift, 15-25s loops, transform/background only) defined in your own CSS, never a flat color; disable animation under prefers-reduced-motion.
@@ -229,8 +230,10 @@ export const Route = createFileRoute("/api/public/generate")({
           let origin = ao();
           const pm = origin.match(/^https:\/\/id-preview--([0-9a-f-]{36})\.lovable\.app$/);
           if (pm) origin = `https://project--${pm[1]}-dev.lovable.app`;
+          if (origin.startsWith("http://") && !/^http:\/\/(localhost|127\.0\.0\.1)(:|$)/.test(origin)) origin = "https://" + origin.slice(7);
           const { data: nj, error: je } = await db.from("generation_jobs").insert({ project_id: project.id, user_id: user.id, mode: body.mode, input: body as any, origin }).select("id").single();
           if (je || !nj) return json(500, "সার্ভারে সমস্যা হয়েছে");
+          console.log("[job] created", nj.id, "origin", origin);
           await db.rpc("kick_job" as any, { _id: nj.id } as any);
           return Response.json({ jobId: nj.id }, { status: 202 });
         }
