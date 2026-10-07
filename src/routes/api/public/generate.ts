@@ -137,114 +137,160 @@ export const Route = createFileRoute("/api/public/generate")({
           .map((a: any) => `- [${a.category}/${a.type}] ${a.name}: ${a.url_or_code}`).join("\n");
         const history = (project.messages as Msg[]) ?? [];
         const isPlan = body.mode === "plan";
-        const userContent = !isPlan && project.code_html
-          ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।`
-          : body.prompt;
         const s2 = settings as any;
-        const messages = isPlan
-          ? [
-              { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? "\n\nThe user already has a website; plan changes to it." : "") },
-              ...history.filter((m) => m.mode === "plan").slice(-10).map((m) => ({ role: m.role, content: m.content })),
-              { role: "user", content: body.prompt },
-            ]
-          : [
-              { role: "system", content: (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") },
-              ...history.filter((m) => m.role === "user" && m.mode !== "plan").slice(-4).map((m) => ({ role: "user", content: m.content })),
-              { role: "user", content: userContent },
-            ];
+        const { relevantContext, outline, applyPatches, DIFF_RULE } = await import("@/lib/context.server");
+        const { data: sum } = await db.from("chat_summaries").select("summary_text, up_to_message_id").eq("project_id", project.id).order("up_to_message_id", { ascending: false }).limit(1).maybeSingle();
+        const summaryMsg = sum ? [{ role: "system", content: `CHAT SUMMARY SO FAR: ${sum.summary_text}` }] : [];
+        const recentHist = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
+
+        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + STRICT_RULE + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "");
+        const hasSite = !isPlan && !!project.code_html;
+        const ctx = hasSite ? relevantContext(project.code_html, body.prompt) : null;
+        const recentMsgs = recentHist.filter((m) => m.role === "user").map((m) => ({ role: "user", content: m.content }));
+
+        const planMessages = [
+          { role: "system", content: (s2.plan_prompt ?? "") + PLAN_FORMAT + (project.code_html ? `\n\nThe user already has a website with these sections:\n${outline(project.code_html)}` : "") },
+          ...summaryMsg,
+          ...recentHist.filter((m) => m.mode === "plan").map((m) => ({ role: m.role, content: m.content })),
+          { role: "user", content: body.prompt },
+        ];
+        const diffMessages = hasSite ? [
+          { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
+          ...summaryMsg,
+          ...recentMsgs,
+          { role: "user", content: `পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${body.prompt}` },
+        ] : null;
+        const fullMessages = [
+          { role: "system", content: buildSystem },
+          ...summaryMsg,
+          ...recentMsgs,
+          { role: "user", content: hasSite ? `এই ওয়েবসাইটটি আছে:\n\`\`\`html\n${project.code_html}\n\`\`\`\n\nপরিবর্তনের অনুরোধ: ${body.prompt}\n\nসম্পূর্ণ আপডেট করা HTML ফাইলটি দিন।` : body.prompt },
+        ];
 
         const enc = new TextEncoder();
         const stream = new ReadableStream({
           async start(controller) {
             const send = (o: object) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
-            let res: Response | null = null;
             let usedProvider: any = null;
-            for (let i = 0; i < ordered.length; i++) {
-              const p = ordered[i];
-              if (i > 0) send({ t: "notice", msg: "মূল AI ব্যস্ত, বিকল্প ব্যবহার করা হচ্ছে..." });
-              try {
-                const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
-                  method: "POST",
-                  signal: request.signal,
-                  headers: {
-                    Authorization: `Bearer ${p.api_key}`,
-                    "Content-Type": "application/json",
-                    ...((p.custom_headers as Record<string, string>) ?? {}),
-                  },
-                  body: JSON.stringify({
-                    model: p.model,
-                    messages,
-                    stream: true,
-                    stream_options: { include_usage: true },
-                    max_tokens: Math.min(p.max_tokens, settings.max_output_tokens),
-                    temperature: p.temperature,
-                  }),
-                });
-                if (r.ok && r.body) {
-                  res = r;
-                  usedProvider = p;
-                  break;
-                }
-                console.error("provider failed", p.name, r.status, (await r.text()).slice(0, 300));
-              } catch (e) {
-                if (request.signal.aborted) return controller.close();
-                console.error("provider error", p.name, e);
-              }
-            }
-            if (!res || !usedProvider) {
-              send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" });
-              return controller.close();
-            }
 
-            let full = "";
-            let tokens = 0;
-            const reader = res.body!.getReader();
-            const dec = new TextDecoder();
-            let buf = "";
-            try {
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buf += dec.decode(value, { stream: true });
-                const lines = buf.split("\n");
-                buf = lines.pop() ?? "";
-                for (const line of lines) {
-                  const l = line.trim();
-                  if (!l.startsWith("data:")) continue;
-                  const payload = l.slice(5).trim();
-                  if (payload === "[DONE]") continue;
-                  try {
-                    const j = JSON.parse(payload);
-                    const c = j.choices?.[0]?.delta?.content;
-                    if (c) {
-                      full += c;
-                      send({ t: "delta", c });
-                    }
-                    if (j.usage?.total_tokens) tokens = j.usage.total_tokens;
-                  } catch {
-                    /* partial line */
+            const run = async (messages: any[], live: boolean): Promise<{ full: string; tokens: number } | null> => {
+              let res: Response | null = null;
+              const list = usedProvider ? [usedProvider, ...ordered.filter((p) => p.id !== usedProvider.id)] : ordered;
+              for (let i = 0; i < list.length; i++) {
+                const p = list[i];
+                if (i > 0) send({ t: "notice", msg: "মূল AI ব্যস্ত, বিকল্প ব্যবহার করা হচ্ছে..." });
+                try {
+                  const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
+                    method: "POST",
+                    signal: request.signal,
+                    headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
+                    body: JSON.stringify({ model: p.model, messages, stream: true, stream_options: { include_usage: true }, max_tokens: Math.min(p.max_tokens, settings.max_output_tokens), temperature: p.temperature }),
+                  });
+                  if (r.ok && r.body) { res = r; usedProvider = p; break; }
+                  console.error("provider failed", p.name, r.status, (await r.text()).slice(0, 300));
+                } catch (e) {
+                  if (request.signal.aborted) return null;
+                  console.error("provider error", p.name, e);
+                }
+              }
+              if (!res) return null;
+              let full = "", tokens = 0, buf = "";
+              const reader = res.body!.getReader();
+              const dec = new TextDecoder();
+              try {
+                while (true) {
+                  const { done, value } = await reader.read();
+                  if (done) break;
+                  buf += dec.decode(value, { stream: true });
+                  const lines = buf.split("\n");
+                  buf = lines.pop() ?? "";
+                  for (const line of lines) {
+                    const l = line.trim();
+                    if (!l.startsWith("data:")) continue;
+                    const payload = l.slice(5).trim();
+                    if (payload === "[DONE]") continue;
+                    try {
+                      const j = JSON.parse(payload);
+                      const c = j.choices?.[0]?.delta?.content;
+                      if (c) { full += c; if (live) send({ t: "delta", c }); }
+                      if (j.usage?.total_tokens) tokens = j.usage.total_tokens;
+                    } catch { /* partial line */ }
                   }
                 }
+              } catch (e) {
+                if (!request.signal.aborted) console.error("stream read", e);
               }
-            } catch (e) {
-              if (!request.signal.aborted) console.error("stream read", e);
-            }
+              if (!tokens) tokens = Math.ceil((JSON.stringify(messages).length + full.length) / 4);
+              return { full, tokens };
+            };
 
-            if (!tokens) tokens = Math.ceil((JSON.stringify(messages).length + full.length) / 4);
-            if (isPlan) {
-              const now = new Date().toISOString();
-              const reply = full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
-              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan" }, { role: "assistant", content: reply, at: now, mode: "plan" }];
+            const finishSummary = async (msgs: Msg[]) => {
+              const from = sum?.up_to_message_id ?? 0;
+              const upTo = msgs.length - 5;
+              if (upTo - from < 10 || !usedProvider) return;
+              try {
+                const p = usedProvider;
+                const text = msgs.slice(from, upTo).map((m) => `${m.role === "user" ? "User" : "AI"}: ${m.content.slice(0, 400)}`).join("\n");
+                const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
+                  method: "POST",
+                  headers: { Authorization: `Bearer ${p.api_key}`, "Content-Type": "application/json", ...((p.custom_headers as Record<string, string>) ?? {}) },
+                  body: JSON.stringify({ model: p.model, max_tokens: 300, temperature: 0.2, messages: [
+                    { role: "system", content: "Summarize this website-building chat in short Bangla, max 4 sentences, format: 'User wants X. Tried Y. Current: Z.' Output only the summary." },
+                    { role: "user", content: (sum ? `Previous summary: ${sum.summary_text}\n\n` : "") + text },
+                  ] }),
+                  signal: AbortSignal.timeout(25000),
+                });
+                if (!r.ok) return;
+                const j: any = await r.json();
+                const t = String(j.choices?.[0]?.message?.content ?? "").trim().slice(0, 1500);
+                if (t) await db.from("chat_summaries").insert({ project_id: project.id, summary_text: t, up_to_message_id: upTo });
+              } catch (e) { console.error("summary", e); }
+            };
+
+            const charge = async (tokens: number, saved: number) => {
               await Promise.all([
-                db.from("projects").update({ messages: newMsgs }).eq("id", project.id),
-                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name }),
+                db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name, tokens_saved: saved } as any),
                 db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
               ]);
-              send({ t: "done", tokens, html: "", plan: reply, used: used + tokens, limit });
+            };
+
+            if (isPlan) {
+              const r = await run(planMessages, true);
+              if (!r) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
+              const now = new Date().toISOString();
+              const reply = r.full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
+              const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan" }, { role: "assistant", content: reply, at: now, mode: "plan" }];
+              await Promise.all([db.from("projects").update({ messages: newMsgs }).eq("id", project.id), charge(r.tokens, 0)]);
+              send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit });
+              await finishSummary(newMsgs);
               return controller.close();
             }
-            const html = extractHtml(full);
+
+            let html = "";
+            let tokens = 0;
+            let saved = 0;
+            if (diffMessages) {
+              send({ t: "notice-soft", msg: "শুধু পরিবর্তিত অংশ লেখা হচ্ছে..." });
+              const r = await run(diffMessages, true);
+              if (r) {
+                tokens = r.tokens;
+                const patched = applyPatches(project.code_html, r.full);
+                if (patched && /<\w+/.test(patched.html)) {
+                  html = patched.html;
+                  const fullCost = Math.ceil((JSON.stringify(fullMessages).length + project.code_html.length) / 4);
+                  saved = Math.max(0, fullCost - tokens);
+                } else {
+                  send({ t: "notice", msg: "পুরো ওয়েবসাইট আবার লেখা হচ্ছে..." });
+                }
+              }
+            }
+            if (!html) {
+              const r = await run(fullMessages, true);
+              if (!r && !tokens) { send({ t: "error", msg: "এই মুহূর্তে কোনো AI সাড়া দিচ্ছে না। একটু পরে আবার চেষ্টা করুন।" }); return controller.close(); }
+              if (r) { tokens += r.tokens; html = extractHtml(r.full); }
+            }
             if (!html || !/<\w+/.test(html)) {
+              html = "";
               send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। অন্যভাবে লিখে আবার চেষ্টা করুন।" });
             }
 
@@ -256,19 +302,17 @@ export const Route = createFileRoute("/api/public/generate")({
             const newMsgs: Msg[] = [
               ...history,
               { role: "user", content: body.prompt, at: now, mode: "build" },
-              { role: "assistant", content: html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
+              { role: "assistant", content: html ? (saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build" },
             ];
             const update: any = { messages: newMsgs };
             if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
             if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = body.prompt.slice(0, 40);
 
-            await Promise.all([
-              db.from("projects").update(update).eq("id", project.id),
-              db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name }),
-              db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
-            ]);
-            send({ t: "done", tokens, html, used: used + tokens, limit });
+            await Promise.all([db.from("projects").update(update).eq("id", project.id), charge(tokens, saved)]);
+            const savedPct = saved ? Math.round((saved / (saved + tokens)) * 100) : 0;
+            send({ t: "done", tokens, html, used: used + tokens, limit, saved, savedPct });
+            await finishSummary(newMsgs);
             controller.close();
           },
         });

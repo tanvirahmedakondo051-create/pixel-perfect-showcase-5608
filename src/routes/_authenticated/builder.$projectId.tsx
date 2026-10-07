@@ -58,6 +58,7 @@ function Builder() {
   const [domainOpen, setDomainOpen] = useState(false);
   const [tab, setTab] = useState<"chat" | "analyze" | "assets">("chat");
   const [mode, setMode] = useState<"plan" | "build">("build");
+  const [lastSaved, setLastSaved] = useState(0);
   const [ghOpen, setGhOpen] = useState(false);
   const [verOpen, setVerOpen] = useState(false);
   const [liveBusy, setLiveBusy] = useState(false);
@@ -141,7 +142,7 @@ function Builder() {
           if (ev.t === "delta") {
             acc += ev.c;
             setLive(acc);
-          } else if (ev.t === "notice") toast.info(ev.msg);
+          } else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
           else if (ev.t === "error") toast.error(ev.msg);
           else if (ev.t === "done") {
             if (ev.html) {
@@ -149,6 +150,7 @@ function Builder() {
               setMobilePreview(true);
             }
             setUsedOverride(ev.used);
+            if (ev.savedPct) { setLastSaved(ev.savedPct); toast.success(`${bn(ev.savedPct)}% টোকেন সেভ 🎉`); }
             if (m0 === "plan") {
               setMessages((m) => [...m, { role: "assistant", content: ev.plan || "", mode: "plan" }]);
             } else {
@@ -307,6 +309,7 @@ function Builder() {
           <div className="border-b border-border px-4 py-2">
             <div className="flex items-center justify-between text-xs">
               <span className="flex items-center gap-1 text-muted-foreground"><Zap className="size-3 text-cyan" /> আজ {bn(used)} / {bn(limit)} টোকেন</span>
+              {lastSaved > 0 && <span className="text-success">{bn(lastSaved)}% সেভ 🎉</span>}
               {pct >= 90 && <Link to="/pricing" className="text-cyan">Pro নিন</Link>}
             </div>
             <Progress value={pct} className={`mt-1.5 h-1.5 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />

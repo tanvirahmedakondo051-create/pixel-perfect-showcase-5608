@@ -151,6 +151,38 @@ export type Database = {
           },
         ]
       }
+      chat_summaries: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string
+          summary_text: string
+          up_to_message_id: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id: string
+          summary_text: string
+          up_to_message_id: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string
+          summary_text?: string
+          up_to_message_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_summaries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flag_keywords: {
         Row: {
           created_at: string
@@ -587,6 +619,7 @@ export type Database = {
           created_at: string
           id: string
           provider_name: string | null
+          tokens_saved: number
           tokens_used: number
           user_id: string
         }
@@ -594,6 +627,7 @@ export type Database = {
           created_at?: string
           id?: string
           provider_name?: string | null
+          tokens_saved?: number
           tokens_used?: number
           user_id: string
         }
@@ -601,6 +635,7 @@ export type Database = {
           created_at?: string
           id?: string
           provider_name?: string | null
+          tokens_saved?: number
           tokens_used?: number
           user_id?: string
         }

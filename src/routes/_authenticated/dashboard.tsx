@@ -33,6 +33,14 @@ function Dashboard() {
     recheck().then((r) => { if (r.changed) { qc.invalidateQueries({ queryKey: ["projects", user.id] }); toast.success("আপনার কাস্টম ডোমেইন সংযুক্ত হয়েছে!"); } }).catch(() => {});
   }, [user?.id]);
 
+  const { data: savedTotal } = useQuery({
+    queryKey: ["tokens-saved", user?.id],
+    enabled: !!user,
+    queryFn: async () => {
+      const { data } = await supabase.from("usage_logs").select("tokens_saved").eq("user_id", user!.id).gt("tokens_saved", 0).limit(1000);
+      return (data ?? []).reduce((a: number, r: any) => a + (r.tokens_saved ?? 0), 0);
+    },
+  });
   const { data: projects, isLoading } = useQuery({
     queryKey: ["projects", user?.id],
     enabled: !!user,
@@ -157,6 +165,11 @@ function Dashboard() {
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-cyan" /> আজকের টোকেন</div>
             <p className="mt-2 text-lg font-semibold">{bn(used)} / {bn(limit)}</p>
             <Progress value={pct} className={`mt-2 h-2 ${pct >= 90 ? "[&>div]:bg-destructive" : "[&>div]:bg-cyan"}`} />
+          </div>
+          <div className="glass rounded-2xl p-5">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground"><Zap className="size-4 text-success" /> সেভ হওয়া টোকেন</div>
+            <p className="mt-2 text-lg font-semibold text-success">{bn(savedTotal ?? 0)}</p>
+            <p className="text-xs text-muted-foreground">শুধু পরিবর্তিত অংশ লেখায় যা বেঁচেছে</p>
           </div>
           <div className="glass rounded-2xl p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground"><Layers className="size-4 text-cyan" /> মোট প্রজেক্ট</div>
