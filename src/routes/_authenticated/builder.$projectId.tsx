@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 const AssetPanel = lazy(() => import("@/components/app/AssetPanel"));
 import { toast } from "sonner";
-import { ArrowRight, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, CheckCircle2, FileText, Server, Sparkles } from "lucide-react";
+import { ArrowRight, Monitor, Smartphone, Code2, Globe, Download, Eye, X, Zap, Loader2, Hexagon, Link2, Github, RefreshCw, History, CheckCircle2, FileText, Server, Sparkles, Bookmark, RotateCcw } from "lucide-react";
+import { MessageCard, DetailsSheet, LiveStatusRow, QuestionDialog, EstimateDialog, PausedCard, CheckpointsDialog, RichText, useExpiringCheckpoints, type ChatMsg, type Question } from "@/components/app/ChatParts";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChatComposer, type Chip } from "@/components/app/ChatComposer";
@@ -30,7 +31,7 @@ export const Route = createFileRoute("/_authenticated/builder/$projectId")({
 });
 
 type Att = { path: string; url: string; name: string; type: string };
-type Msg = { role: "user" | "assistant"; content: string; at?: string; mode?: "plan" | "build"; files?: { name: string; url: string; type: string }[] };
+type Msg = ChatMsg;
 const LINK_RE = /https?:\/\/[^\s<>"']+|www\.[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i;
 const OPT_RE = /\[\[(.+?)\]\]/g;
 const chips = ["রেস্টুরেন্ট সাইট", "পোর্টফোলিও", "অনলাইন শপ", "বিয়ের দাওয়াত পেজ"];
@@ -125,39 +126,88 @@ function Builder() {
   const [doneSum, setDoneSum] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const outMsg = "🪙 কয়েন শেষ! কাল আবার পাবেন, অথবা আপগ্রেড করুন";
+  const [progOpen, setProgOpen] = useState(false);
+  const [steps, setSteps] = useState<string[]>([]);
+  const [stepIdx, setStepIdx] = useState(0);
+  const [detail, setDetail] = useState<Msg | null>(null);
+  const [onlyMarked, setOnlyMarked] = useState(false);
+  const [cpOpen, setCpOpen] = useState(false);
+  const [questions, setQuestions] = useState<Question[] | null>(null);
+  const [est, setEst] = useState<number | null>(null);
+  const pendingRef = useRef<{ prompt: string; mode: "plan" | "build"; files: Att[] } | null>(null);
+  const expiring = useExpiringCheckpoints(projectId);
+
+  useEffect(() => {
+    const h = window.location.hash;
+    if (h.startsWith("#msg-") && messages.length) setTimeout(() => document.getElementById(h.slice(1))?.scrollIntoView({ block: "center" }), 300);
+  }, [messages.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleBookmark = async (i: number) => {
+    const next = messages.map((m, k) => (k === i ? { ...m, bookmarked: !m.bookmarked } : m));
+    setMessages(next);
+    const { error } = await supabase.from("projects").update({ messages: next as any }).eq("id", projectId);
+    if (error) toast.error("সেভ করা যায়নি");
+  };
+  const retry = (m: Msg) => {
+    const idx = messages.indexOf(m);
+    const prev = [...messages.slice(0, idx)].reverse().find((x) => x.role === "user");
+    if (prev) send(prev.content, prev.mode ?? "build");
+  };
 
   const autosize = () => {};
 
+  // Entry point: optional clarifying questions → cost estimate → run.
   const send = async (text?: string, modeOverride?: "plan" | "build") => {
     const m0 = modeOverride ?? mode;
     const prompt = (text ?? input).trim();
     if ((!prompt && !atts.length) || streaming || uploading) return;
-    const files = atts;
     if (coins <= 0) return toast.error(outMsg, { action: { label: "প্ল্যান দেখুন", onClick: () => { window.location.href = "/pricing"; } } });
-    setInput("");
-    setTimeout(autosize);
-    setAtts([]);
+    const files = atts;
+    setInput(""); setAtts([]);
     const text0 = prompt || "এই ফাইলগুলো ওয়েবসাইটে ব্যবহার করো";
-    setMessages((m) => [...m, { role: "user", content: text0, mode: m0, files: files.map((f) => ({ name: f.name, url: f.url, type: f.type })) }]);
+    pendingRef.current = { prompt: text0, mode: m0, files };
+    if (m0 === "build" && !html && prompt.length < 400 && !files.length) {
+      setProg({ step: "অনুরোধ বুঝছি...", tokens: 0, start: Date.now(), last: Date.now() });
+      setStreaming(true);
+      try {
+        const r = await fetch("/api/public/generate", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, intent: "ask" }) });
+        const j = await r.json().catch(() => ({}));
+        if (r.ok && j.questions?.length) { setQuestions(j.questions); return; }
+      } catch { /* continue without questions */ } finally { setStreaming(false); setProg(null); }
+    }
+    confirmCost();
+  };
+  const confirmCost = () => {
+    const p = pendingRef.current; if (!p) return;
+    const e = p.mode === "plan" ? 0 : !html ? (7 * 4500) / tpc : (html.length / 4 * 0.5 + 3000) / tpc;
+    if (p.mode === "build" && (!html || e > coins)) setEst(Math.max(0.1, Math.round(e * 10) / 10));
+    else { pendingRef.current = null; exec(p.prompt, p.mode, p.files); }
+  };
+
+  const exec = async (text0: string, m0: "plan" | "build", files: Att[], resumeId?: string) => {
+    if (streaming) return;
+    if (resumeId && coins <= 0) return toast.error(outMsg);
+    if (!resumeId) setMessages((m) => [...m, { role: "user", content: text0, mode: m0, at: new Date().toISOString(), files: files.map((f) => ({ name: f.name, url: f.url, type: f.type })) }]);
     setStreaming(true);
     setLive("");
     setDoneSum(null);
+    setSteps([]); setStepIdx(0);
     const ac = new AbortController();
     abortRef.current = ac;
     const t0 = Date.now();
-    setProg({ step: "পাঠানো হচ্ছে...", tokens: 0, start: t0, last: t0 });
+    setProg({ step: resumeId ? "চেকপয়েন্ট থেকে চালু করছি..." : "পাঠানো হচ্ছে...", tokens: 0, start: t0, last: t0 });
     try {
       const res = await fetch("/api/public/generate", {
         method: "POST",
         signal: ac.signal,
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files }),
+        body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files, resumeId: resumeId ?? null }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
         if (j.error === "COINS_OUT") j.error = outMsg;
         toast.error(j.error);
-        setMessages((m) => [...m, { role: "assistant", content: j.error }]);
+        setMessages((m) => [...m, { role: "assistant", content: j.error, at: new Date().toISOString() }]);
         return;
       }
       const reader = res.body.getReader();
@@ -173,12 +223,24 @@ function Builder() {
         for (const l of lines) {
           if (!l.trim()) continue;
           const ev = JSON.parse(l);
-          if (ev.t === "progress") { setProg((p) => p && { ...p, step: ev.step, tokens: ev.tokens, last: Date.now() }); continue; }
+          if (ev.t === "progress") {
+            setProg((p) => p && { ...p, step: ev.step, tokens: ev.tokens, last: Date.now() });
+            if (ev.steps) { setSteps(ev.steps); setStepIdx(ev.stepIndex ?? 0); }
+            continue;
+          }
           if (ev.t === "delta") {
             setProg((p) => p && (Date.now() - p.last > 2000 ? { ...p, last: Date.now() } : p));
             acc += ev.c;
             setLive(acc);
-          } else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
+          } else if (ev.t === "checkpoint") { if (ev.html) setHtml(ev.html); setStepIdx(ev.done); acc = ""; setLive(""); }
+          else if (ev.t === "paused") {
+            if (ev.html) setHtml(ev.html);
+            if (typeof ev.balance === "number") setUsedOverride(ev.balance);
+            setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), ev.msg]);
+            if (ev.error) toast.error(ev.error); else toast.info("⏸️ কয়েন শেষ — কাজ থামানো হয়েছে, চেকপয়েন্ট সেভ আছে");
+            qc.invalidateQueries({ queryKey: ["profile"] });
+          }
+          else if (ev.t === "notice") { toast.info(ev.msg); acc = ""; setLive(""); }
           else if (ev.t === "error") toast.error(ev.msg);
           else if (ev.t === "done") {
             if (ev.html) {
@@ -189,19 +251,16 @@ function Builder() {
             setDoneSum(`✅ ${fmtDuration(ev.ms ?? Date.now() - t0)}-তে শেষ • ${bn(ev.tokens)} টোকেন (${fmtCoins(ev.coins ?? ev.tokens / tpc)} কয়েন)`);
             qc.invalidateQueries({ queryKey: ["profile"] });
             if (ev.savedPct) { setLastSaved(ev.savedPct); toast.success(`${bn(ev.savedPct)}% টোকেন সেভ 🎉`); }
-            if (m0 === "plan") {
-              setMessages((m) => [...m, { role: "assistant", content: ev.plan || "", mode: "plan" }]);
-            } else {
-              setMessages((m) => [...m, { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" }]);
-              toast.success("সেভ হয়েছে ✓");
-            }
+            const fallback: Msg = m0 === "plan" ? { role: "assistant", content: ev.plan || "", mode: "plan" } : { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" };
+            setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), ev.msg ?? fallback]);
+            if (m0 !== "plan") toast.success("সেভ হয়েছে ✓");
             qc.invalidateQueries({ queryKey: ["project", projectId] });
             qc.invalidateQueries({ queryKey: ["projects"] });
           }
         }
       }
     } catch {
-      if (ac.signal.aborted) { toast.info("বাতিল করা হয়েছে"); setMessages((m) => [...m, { role: "assistant", content: "বাতিল করা হয়েছে" }]); }
+      if (ac.signal.aborted) { toast.info("বাতিল করা হয়েছে"); setMessages((m) => [...m, { role: "assistant", content: "বাতিল করা হয়েছে", at: new Date().toISOString() }]); }
       else toast.error("সংযোগে সমস্যা হয়েছে, আবার চেষ্টা করুন");
     } finally {
       setProg(null);
@@ -318,6 +377,7 @@ function Builder() {
       </div>
       <div className="ml-auto flex flex-wrap justify-end gap-1">
         <button onClick={() => setGhOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="GitHub"><Github className="size-4" /><span className="hidden sm:inline">GitHub</span></button>
+        <button onClick={() => setCpOpen(true)} className="flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm hover:bg-accent" aria-label="চেকপয়েন্ট"><RotateCcw className="size-4" /><span className="hidden lg:inline">চেকপয়েন্ট</span></button>
         {published.on && <button onClick={() => setVerOpen(true)} className="grid size-11 place-items-center rounded-lg hover:bg-accent" aria-label="ভার্সন ইতিহাস"><History className="size-4" /></button>}
         {published.on && changes > 0 && (
           <button onClick={runLive} disabled={liveBusy || streaming} className="relative flex min-h-11 items-center gap-1.5 rounded-lg bg-brand px-3 text-sm font-semibold disabled:opacity-60">
