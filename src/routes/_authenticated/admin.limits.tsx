@@ -21,14 +21,14 @@ function Limits() {
   const { data: s } = useSiteSettings();
   const reset = useServerFn(adminResetUsage);
   const [caps, setCaps] = useState<Record<string, number>>({});
-  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 8000, free_block_publish: false, require_email_verify: false });
+  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 8000, tokens_per_coin: 10000, free_block_publish: false, require_email_verify: false });
   const [confirm, setConfirm] = useState(false);
   useEffect(() => { if (plans) setCaps(Object.fromEntries(plans.map((p) => [p.id, p.tokens_per_day]))); }, [plans]);
-  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify }); }, [s]);
+  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, tokens_per_coin: (s as any).tokens_per_coin ?? 10000, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify }); }, [s]);
 
   async function save() {
     for (const [id, v] of Object.entries(caps)) await supabase.from("plans").update({ tokens_per_day: +v }).eq("id", id);
-    const { error } = await supabase.from("site_settings").update({ ...g, rate_limit_per_minute: +g.rate_limit_per_minute, max_output_tokens: +g.max_output_tokens }).eq("id", 1);
+    const { error } = await supabase.from("site_settings").update({ ...g, rate_limit_per_minute: +g.rate_limit_per_minute, max_output_tokens: +g.max_output_tokens, tokens_per_coin: Math.max(1, +g.tokens_per_coin) } as any).eq("id", 1);
     if (error) return toast.error("সেভ করা যায়নি");
     qc.invalidateQueries({ queryKey: ["plans"] });
     qc.invalidateQueries({ queryKey: ["site-settings"] });
@@ -50,6 +50,7 @@ function Limits() {
       <Panel title="সাধারণ লিমিট">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="প্রতি মিনিটে সর্বোচ্চ রিকোয়েস্ট"><input type="number" className={inputCls} value={g.rate_limit_per_minute} onChange={(e) => setG({ ...g, rate_limit_per_minute: +e.target.value })} /></Field>
+          <Field label="কত টোকেনে ১ কয়েন"><input type="number" className={inputCls} value={g.tokens_per_coin} onChange={(e) => setG({ ...g, tokens_per_coin: +e.target.value })} /></Field>
           <Field label="সর্বোচ্চ আউটপুট টোকেন"><input type="number" className={inputCls} value={g.max_output_tokens} onChange={(e) => setG({ ...g, max_output_tokens: +e.target.value })} /></Field>
         </div>
         <div className="mt-3 space-y-2">
