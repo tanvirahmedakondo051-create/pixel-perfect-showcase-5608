@@ -121,7 +121,10 @@ export const Route = createFileRoute("/api/public/generate")({
           await db.from("profiles").update({ tokens_used_today: 0, last_reset_date: today }).eq("id", user.id);
         }
         const limit = (profile.plans as any)?.tokens_per_day ?? 50000;
-        if (used >= limit) return json(429, "আজকের টোকেন শেষ! আগামীকাল আবার চেষ্টা করুন অথবা Pro নিন।");
+        const tpc = Math.max(1, (settings as any).tokens_per_coin ?? 10000);
+        const coinsBefore = Number((profile as any).coins ?? 0);
+        if (coinsBefore <= 0) return json(402, "COINS_OUT");
+        const startedAt = Date.now();
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
