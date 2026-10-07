@@ -4,6 +4,7 @@ import { Logo } from "@/components/site/Brand";
 import { AnnouncementBar } from "@/components/site/SiteHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin, useSession } from "@/lib/auth";
+import { CoinChip } from "@/components/app/Coins";
 
 export function AppHeader() {
   const { user } = useSession();
@@ -16,6 +17,7 @@ export function AppHeader() {
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-2 px-4">
           <Logo />
           <div className="flex items-center gap-1">
+            <CoinChip />
             {isAdmin && (
               <Link to="/admin" className="flex min-h-12 items-center gap-1.5 rounded-xl px-3 text-sm text-muted-foreground hover:bg-accent">
                 <Shield className="size-4" /> <span className="hidden sm:inline">অ্যাডমিন</span>

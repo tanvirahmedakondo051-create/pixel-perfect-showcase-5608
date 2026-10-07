@@ -110,6 +110,7 @@ export type Database = {
       aura_payments: {
         Row: {
           amount: number
+          coins_granted: boolean
           created_at: string
           id: string
           invoice_id: string | null
@@ -121,6 +122,7 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          coins_granted?: boolean
           created_at?: string
           id?: string
           invoice_id?: string | null
@@ -132,6 +134,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          coins_granted?: boolean
           created_at?: string
           id?: string
           invoice_id?: string | null
@@ -182,6 +185,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      coin_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          reason: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          reason?: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          reason?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       flag_keywords: {
         Row: {
@@ -305,10 +335,13 @@ export type Database = {
       plans: {
         Row: {
           allow_custom_domain: boolean
+          bonus_coins: number
           can_download: boolean
           can_publish: boolean
           can_view_code: boolean
+          coin_cap: number
           created_at: string
+          daily_coins: number
           default_provider_id: string | null
           duration_days: number
           features: string[]
@@ -325,10 +358,13 @@ export type Database = {
         }
         Insert: {
           allow_custom_domain?: boolean
+          bonus_coins?: number
           can_download?: boolean
           can_publish?: boolean
           can_view_code?: boolean
+          coin_cap?: number
           created_at?: string
+          daily_coins?: number
           default_provider_id?: string | null
           duration_days?: number
           features?: string[]
@@ -345,10 +381,13 @@ export type Database = {
         }
         Update: {
           allow_custom_domain?: boolean
+          bonus_coins?: number
           can_download?: boolean
           can_publish?: boolean
           can_view_code?: boolean
+          coin_cap?: number
           created_at?: string
+          daily_coins?: number
           default_provider_id?: string | null
           duration_days?: number
           features?: string[]
@@ -375,6 +414,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          coins: number
           created_at: string
           email: string | null
           id: string
@@ -388,6 +428,7 @@ export type Database = {
           tokens_used_today: number
         }
         Insert: {
+          coins?: number
           created_at?: string
           email?: string | null
           id: string
@@ -401,6 +442,7 @@ export type Database = {
           tokens_used_today?: number
         }
         Update: {
+          coins?: number
           created_at?: string
           email?: string | null
           id?: string
@@ -623,6 +665,7 @@ export type Database = {
           system_prompt: string
           tagline: string
           telegram_link: string
+          tokens_per_coin: number
           updated_at: string
         }
         Insert: {
@@ -656,6 +699,7 @@ export type Database = {
           system_prompt?: string
           tagline?: string
           telegram_link?: string
+          tokens_per_coin?: number
           updated_at?: string
         }
         Update: {
@@ -689,6 +733,7 @@ export type Database = {
           system_prompt?: string
           tagline?: string
           telegram_link?: string
+          tokens_per_coin?: number
           updated_at?: string
         }
         Relationships: []
@@ -776,6 +821,11 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_coins: {
+        Args: { _amount: number; _reason: string; _type: string; _user: string }
+        Returns: number
+      }
+      daily_coin_refill: { Args: never; Returns: number }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

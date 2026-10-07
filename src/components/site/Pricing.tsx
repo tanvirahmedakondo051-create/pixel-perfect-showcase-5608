@@ -36,6 +36,11 @@ export function PricingCards() {
                 <span className="text-4xl font-bold">৳{bn(p.price_bdt)}</span>
                 <span className="text-muted-foreground"> / মাস</span>
               </p>
+              <div className="mt-5 rounded-xl border border-border bg-background/40 p-3">
+                <p className="flex items-center gap-2 text-lg font-bold">🪙 {bn((p as any).bonus_coins ?? 0)} <span className="text-sm font-normal text-muted-foreground">কয়েন {p.price_bdt ? "কেনার সাথে" : "সাইনআপে"}</span></p>
+                <p className="mt-1 text-sm">+{bn((p as any).daily_coins ?? 0)} কয়েন প্রতিদিন <span className="text-muted-foreground">(সর্বোচ্চ {bn((p as any).coin_cap ?? 0)})</span></p>
+                <p className="mt-1 text-xs text-muted-foreground">≈ {bn(Math.floor(((p as any).bonus_coins ?? 0) / 1.5))}টি সাইট শুরুতেই</p>
+              </div>
               <ul className="mt-6 space-y-3">
                 {p.features.map((f) => (
                   <li key={f} className="flex gap-2 text-sm">
@@ -60,6 +65,7 @@ export function PricingCards() {
           );
         })}
       </div>
+      <p className="mt-6 text-center text-sm text-muted-foreground">🪙 ১ কয়েন = AI-এর ছোট একটি কাজ। একটি পুরো ওয়েবসাইট বানাতে সাধারণত ১-২ কয়েন লাগে।</p>
     </>
   );
 }

@@ -27,13 +27,14 @@ export async function allowedProviders(db: any, plan: any) {
 }
 
 export async function applyPlan(db: any, userId: string, planId: string) {
-  const { data: plan } = await db.from("plans").select("duration_days").eq("id", planId).single();
+  const { data: plan } = await db.from("plans").select("duration_days, bonus_coins, name_bn").eq("id", planId).single();
   const days = plan?.duration_days ?? 0;
   const { data: prof } = await db.from("profiles").select("plan_id, plan_expires_at").eq("id", userId).single();
   let base = Date.now();
   if (prof?.plan_id === planId && prof.plan_expires_at && new Date(prof.plan_expires_at).getTime() > base) base = new Date(prof.plan_expires_at).getTime();
   const expires = days > 0 ? new Date(base + days * 86400_000).toISOString() : null;
   await db.from("profiles").update({ plan_id: planId, plan_expires_at: expires, plan_ended_at: null, sites_deleted_at: null }).eq("id", userId);
+  if (plan?.bonus_coins > 0) await db.rpc("add_coins", { _user: userId, _amount: plan.bonus_coins, _type: "purchase", _reason: `${plan.name_bn} প্ল্যান কেনা` });
 }
 
 const AURA = "https://pay.aurapay.top/api/payment";

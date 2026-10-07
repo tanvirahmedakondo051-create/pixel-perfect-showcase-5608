@@ -121,7 +121,10 @@ export const Route = createFileRoute("/api/public/generate")({
           await db.from("profiles").update({ tokens_used_today: 0, last_reset_date: today }).eq("id", user.id);
         }
         const limit = (profile.plans as any)?.tokens_per_day ?? 50000;
-        if (used >= limit) return json(429, "আজকের টোকেন শেষ! আগামীকাল আবার চেষ্টা করুন অথবা Pro নিন।");
+        const tpc = Math.max(1, (settings as any).tokens_per_coin ?? 10000);
+        const coinsBefore = Number((profile as any).coins ?? 0);
+        if (coinsBefore <= 0) return json(402, "COINS_OUT");
+        const startedAt = Date.now();
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
@@ -199,6 +202,8 @@ export const Route = createFileRoute("/api/public/generate")({
           async start(controller) {
             const send = (o: object) => controller.enqueue(enc.encode(JSON.stringify(o) + "\n"));
             let usedProvider: any = null;
+            let baseTokens = 0;
+            send({ t: "progress", step: "অনুরোধ বিশ্লেষণ করছি...", tokens: 0 });
 
             const run = async (messages: any[], live: boolean): Promise<{ full: string; tokens: number } | null> => {
               let res: Response | null = null;
@@ -221,7 +226,8 @@ export const Route = createFileRoute("/api/public/generate")({
                 }
               }
               if (!res) return null;
-              let full = "", tokens = 0, buf = "";
+              let full = "", tokens = 0, buf = "", lastP = 0;
+              send({ t: "progress", step: "লিখতে শুরু করছি...", tokens: baseTokens });
               const reader = res.body!.getReader();
               const dec = new TextDecoder();
               try {
@@ -239,7 +245,16 @@ export const Route = createFileRoute("/api/public/generate")({
                     try {
                       const j = JSON.parse(payload);
                       const c = j.choices?.[0]?.delta?.content;
-                      if (c) { full += c; if (live) send({ t: "delta", c }); }
+                      if (c) {
+                        full += c;
+                        if (live) send({ t: "delta", c });
+                        const est = Math.ceil(full.length / 4);
+                        if (est - lastP >= 150) {
+                          lastP = est;
+                          const step = /<<<<<<<|SEARCH|REPLACE/.test(c) || /<<<<<<<\s*SEARCH/.test(full.slice(-400)) ? "লেআউট ঠিক করছি..." : /<(html|body|!doctype)/i.test(full) ? (/<\/body>/i.test(full) ? "শেষ ছোঁয়া দিচ্ছি..." : "HTML লিখছি...") : "পরিকল্পনা লিখছি...";
+                          send({ t: "progress", step, tokens: baseTokens + est });
+                        }
+                      }
                       if (j.usage?.total_tokens) tokens = j.usage.total_tokens;
                     } catch { /* partial line */ }
                   }
@@ -275,7 +290,9 @@ export const Route = createFileRoute("/api/public/generate")({
             };
 
             const charge = async (tokens: number, saved: number) => {
+              const coins = Math.round((tokens / tpc) * 100) / 100;
               await Promise.all([
+                coins > 0 ? db.rpc("add_coins" as any, { _user: user.id, _amount: -coins, _type: "spend", _reason: (isPlan ? "পরিকল্পনা: " : "ওয়েবসাইট: ") + body.prompt.slice(0, 60) } as any) : null,
                 db.from("usage_logs").insert({ user_id: user.id, tokens_used: tokens, provider_name: usedProvider.name, tokens_saved: saved } as any),
                 db.from("profiles").update({ tokens_used_today: used + tokens, last_reset_date: today }).eq("id", user.id),
               ]);
@@ -288,7 +305,7 @@ export const Route = createFileRoute("/api/public/generate")({
               const reply = r.full.trim() || "দুঃখিত, উত্তর পাওয়া যায়নি";
               const newMsgs: Msg[] = [...history, { role: "user", content: body.prompt, at: now, mode: "plan", files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) } as any, { role: "assistant", content: reply, at: now, mode: "plan" }];
               await Promise.all([db.from("projects").update({ messages: newMsgs }).eq("id", project.id), charge(r.tokens, 0)]);
-              send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit });
+              send({ t: "done", tokens: r.tokens, html: "", plan: reply, used: used + r.tokens, limit, coins: Math.round((r.tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - r.tokens / tpc), ms: Date.now() - startedAt });
               await finishSummary(newMsgs);
               return controller.close();
             }
@@ -301,6 +318,7 @@ export const Route = createFileRoute("/api/public/generate")({
               const r = await run(diffMessages, true);
               if (r) {
                 tokens = r.tokens;
+                baseTokens = tokens;
                 const patched = applyPatches(project.code_html, r.full);
                 if (patched && /<\w+/.test(patched.html)) {
                   html = patched.html;
@@ -338,7 +356,7 @@ export const Route = createFileRoute("/api/public/generate")({
 
             await Promise.all([db.from("projects").update(update).eq("id", project.id), charge(tokens, saved)]);
             const savedPct = saved ? Math.round((saved / (saved + tokens)) * 100) : 0;
-            send({ t: "done", tokens, html, used: used + tokens, limit, saved, savedPct });
+            send({ t: "done", tokens, html, used: used + tokens, limit, saved, savedPct, coins: Math.round((tokens / tpc) * 100) / 100, balance: Math.max(0, coinsBefore - tokens / tpc), ms: Date.now() - startedAt });
             await finishSummary(newMsgs);
             controller.close();
           },

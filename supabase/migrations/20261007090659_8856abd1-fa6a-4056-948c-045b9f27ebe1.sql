@@ -1,0 +1,1 @@
+revoke execute on function public.guard_profile_coins() from public, anon, authenticated;

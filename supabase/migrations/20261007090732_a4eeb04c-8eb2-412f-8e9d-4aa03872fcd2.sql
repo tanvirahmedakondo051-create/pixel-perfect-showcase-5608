@@ -1,0 +1,1 @@
+select cron.schedule('hexa-coin-refill', '0 18 * * *', $$ select public.daily_coin_refill(); $$);

@@ -19,3 +19,4 @@
 - Chat uploads go to the private `uploads` bucket via `upload.functions.ts` and are served publicly at `/uploads/{project_id}/{file}`; images reach the AI as signed-URL vision parts; links in a prompt are auto-analysed by `analyze.server.ts`.
 - The builder has one chat + preview layout (no tabs); assets open in a popover.
 - Skill packs live in `skill_packs` and GitHub import analysis in `project_analysis`; `generate.ts` injects both into plan/build system prompts — keeps site-type expertise and imported-codebase context admin-editable and server-side.
+- Coin balances change only through the security-definer `add_coins` SQL function (service role) which also writes `coin_transactions`; a trigger blocks user edits to `profiles.coins` and daily refill runs as a pg_cron SQL job — keeps the ledger and balance consistent and tamper-proof.
