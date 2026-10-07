@@ -39,6 +39,8 @@ import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 import { Route as ApiPublicCronExpiryRouteImport } from './routes/api/public/cron/expiry'
 import { Route as ApiPublicDbProjectIdAuthRouteImport } from './routes/api/public/db.$projectId.auth'
+import { Route as ApiPublicDbProjectIdGoogleRouteImport } from './routes/api/public/db.$projectId.google'
+import { Route as ApiPublicSiteOauthGoogleCallbackRouteImport } from './routes/api/public/site-oauth.google.callback'
 import { Route as ApiPublicDbProjectIdTTableRouteImport } from './routes/api/public/db.$projectId.t.$table'
 
 const IndexRoute = IndexRouteImport.update({
@@ -202,6 +204,18 @@ const ApiPublicDbProjectIdAuthRoute =
     path: '/api/public/db/$projectId/auth',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicDbProjectIdGoogleRoute =
+  ApiPublicDbProjectIdGoogleRouteImport.update({
+    id: '/api/public/db/$projectId/google',
+    path: '/api/public/db/$projectId/google',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicSiteOauthGoogleCallbackRoute =
+  ApiPublicSiteOauthGoogleCallbackRouteImport.update({
+    id: '/api/public/site-oauth/google/callback',
+    path: '/api/public/site-oauth/google/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicDbProjectIdTTableRoute =
   ApiPublicDbProjectIdTTableRouteImport.update({
     id: '/api/public/db/$projectId/t/$table',
@@ -239,6 +253,8 @@ export interface FileRoutesByFullPath {
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
   '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/google': typeof ApiPublicDbProjectIdGoogleRoute
+  '/api/public/site-oauth/google/callback': typeof ApiPublicSiteOauthGoogleCallbackRoute
   '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRoutesByTo {
@@ -270,6 +286,8 @@ export interface FileRoutesByTo {
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
   '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/google': typeof ApiPublicDbProjectIdGoogleRoute
+  '/api/public/site-oauth/google/callback': typeof ApiPublicSiteOauthGoogleCallbackRoute
   '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRoutesById {
@@ -304,6 +322,8 @@ export interface FileRoutesById {
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
   '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/google': typeof ApiPublicDbProjectIdGoogleRoute
+  '/api/public/site-oauth/google/callback': typeof ApiPublicSiteOauthGoogleCallbackRoute
   '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRouteTypes {
@@ -338,6 +358,8 @@ export interface FileRouteTypes {
     | '/api/public/cron/expiry'
     | '/admin/plans/'
     | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/google'
+    | '/api/public/site-oauth/google/callback'
     | '/api/public/db/$projectId/t/$table'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -369,6 +391,8 @@ export interface FileRouteTypes {
     | '/api/public/cron/expiry'
     | '/admin/plans'
     | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/google'
+    | '/api/public/site-oauth/google/callback'
     | '/api/public/db/$projectId/t/$table'
   id:
     | '__root__'
@@ -402,6 +426,8 @@ export interface FileRouteTypes {
     | '/api/public/cron/expiry'
     | '/_authenticated/admin/plans/'
     | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/google'
+    | '/api/public/site-oauth/google/callback'
     | '/api/public/db/$projectId/t/$table'
   fileRoutesById: FileRoutesById
 }
@@ -421,6 +447,8 @@ export interface RootRouteChildren {
   UploadsProjectIdFileRoute: typeof UploadsProjectIdFileRoute
   ApiPublicCronExpiryRoute: typeof ApiPublicCronExpiryRoute
   ApiPublicDbProjectIdAuthRoute: typeof ApiPublicDbProjectIdAuthRoute
+  ApiPublicDbProjectIdGoogleRoute: typeof ApiPublicDbProjectIdGoogleRoute
+  ApiPublicSiteOauthGoogleCallbackRoute: typeof ApiPublicSiteOauthGoogleCallbackRoute
   ApiPublicDbProjectIdTTableRoute: typeof ApiPublicDbProjectIdTTableRoute
 }
 
@@ -636,6 +664,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicDbProjectIdAuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/db/$projectId/google': {
+      id: '/api/public/db/$projectId/google'
+      path: '/api/public/db/$projectId/google'
+      fullPath: '/api/public/db/$projectId/google'
+      preLoaderRoute: typeof ApiPublicDbProjectIdGoogleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/site-oauth/google/callback': {
+      id: '/api/public/site-oauth/google/callback'
+      path: '/api/public/site-oauth/google/callback'
+      fullPath: '/api/public/site-oauth/google/callback'
+      preLoaderRoute: typeof ApiPublicSiteOauthGoogleCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/db/$projectId/t/$table': {
       id: '/api/public/db/$projectId/t/$table'
       path: '/api/public/db/$projectId/t/$table'
@@ -710,6 +752,8 @@ const rootRouteChildren: RootRouteChildren = {
   UploadsProjectIdFileRoute: UploadsProjectIdFileRoute,
   ApiPublicCronExpiryRoute: ApiPublicCronExpiryRoute,
   ApiPublicDbProjectIdAuthRoute: ApiPublicDbProjectIdAuthRoute,
+  ApiPublicDbProjectIdGoogleRoute: ApiPublicDbProjectIdGoogleRoute,
+  ApiPublicSiteOauthGoogleCallbackRoute: ApiPublicSiteOauthGoogleCallbackRoute,
   ApiPublicDbProjectIdTTableRoute: ApiPublicDbProjectIdTTableRoute,
 }
 export const routeTree = rootRouteImport
