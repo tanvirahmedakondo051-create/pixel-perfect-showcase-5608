@@ -213,11 +213,13 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         const withExtra = (text: string) => (imageParts.length ? [{ type: "text", text: text + extra }, ...imageParts] : text + extra);
 
-        const [{ data: pack }, { data: analysis }] = await Promise.all([
-          (project as any).skill_pack_id ? db.from("skill_packs").select("name_bn, system_prompt").eq("id", (project as any).skill_pack_id).maybeSingle() : Promise.resolve({ data: null } as any),
+        const [{ data: pack }, { data: analysis }, { data: dq }] = await Promise.all([
+          (project as any).skill_pack_id ? db.from("skill_packs").select("slug, name_bn, system_prompt").eq("id", (project as any).skill_pack_id).maybeSingle() : Promise.resolve({ data: null } as any),
           db.from("project_analysis").select("*").eq("project_id", project.id).maybeSingle(),
+          db.from("skill_packs").select("system_prompt").eq("slug", "design-quality").eq("is_active", true).maybeSingle(),
         ]);
         let skillCtx = pack?.system_prompt ? `\n\n${pack.system_prompt}` : "";
+        if (dq?.system_prompt && (pack as any)?.slug !== "design-quality") skillCtx += `\n\n${dq.system_prompt}`;
         if (analysis) {
           const files = ((analysis.file_map_json as any[]) ?? []).slice(0, 60).map((f) => `- ${f.path} (${f.role})`).join("\n");
           skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;

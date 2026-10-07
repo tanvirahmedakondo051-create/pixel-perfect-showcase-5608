@@ -8,7 +8,7 @@ export function useSkillPacks(all = false) {
     queryKey: ["skill-packs", all],
     queryFn: async () => {
       let q = supabase.from("skill_packs").select("*").order("sort_order");
-      if (!all) q = q.eq("is_active", true);
+      if (!all) q = q.eq("is_active", true).neq("slug", "design-quality");
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as SkillPack[];
