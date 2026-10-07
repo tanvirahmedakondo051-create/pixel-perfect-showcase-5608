@@ -20,6 +20,7 @@ import { Route as PaymentSuccessRouteImport } from './routes/payment.success'
 import { Route as SSubdomainRouteImport } from './routes/s.$subdomain'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminAnalyticsRouteImport } from './routes/_authenticated/admin.analytics'
+import { Route as AuthenticatedAdminAssetsRouteImport } from './routes/_authenticated/admin.assets'
 import { Route as AuthenticatedAdminLimitsRouteImport } from './routes/_authenticated/admin.limits'
 import { Route as AuthenticatedAdminModerationRouteImport } from './routes/_authenticated/admin.moderation'
 import { Route as AuthenticatedAdminPaymentsRouteImport } from './routes/_authenticated/admin.payments'
@@ -86,6 +87,12 @@ const AuthenticatedAdminAnalyticsRoute =
   AuthenticatedAdminAnalyticsRouteImport.update({
     id: '/analytics',
     path: '/analytics',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
+const AuthenticatedAdminAssetsRoute =
+  AuthenticatedAdminAssetsRouteImport.update({
+    id: '/assets',
+    path: '/assets',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
 const AuthenticatedAdminLimitsRoute =
@@ -167,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/admin/assets': typeof AuthenticatedAdminAssetsRoute
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -190,6 +198,7 @@ export interface FileRoutesByTo {
   '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/admin/assets': typeof AuthenticatedAdminAssetsRoute
   '/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -216,6 +225,7 @@ export interface FileRoutesById {
   '/payment/success': typeof PaymentSuccessRoute
   '/s/$subdomain': typeof SSubdomainRoute
   '/_authenticated/admin/analytics': typeof AuthenticatedAdminAnalyticsRoute
+  '/_authenticated/admin/assets': typeof AuthenticatedAdminAssetsRoute
   '/_authenticated/admin/limits': typeof AuthenticatedAdminLimitsRoute
   '/_authenticated/admin/moderation': typeof AuthenticatedAdminModerationRoute
   '/_authenticated/admin/payments': typeof AuthenticatedAdminPaymentsRoute
@@ -242,6 +252,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/s/$subdomain'
     | '/admin/analytics'
+    | '/admin/assets'
     | '/admin/limits'
     | '/admin/moderation'
     | '/admin/payments'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/s/$subdomain'
     | '/admin/analytics'
+    | '/admin/assets'
     | '/admin/limits'
     | '/admin/moderation'
     | '/admin/payments'
@@ -290,6 +302,7 @@ export interface FileRouteTypes {
     | '/payment/success'
     | '/s/$subdomain'
     | '/_authenticated/admin/analytics'
+    | '/_authenticated/admin/assets'
     | '/_authenticated/admin/limits'
     | '/_authenticated/admin/moderation'
     | '/_authenticated/admin/payments'
@@ -397,6 +410,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminAnalyticsRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/assets': {
+      id: '/_authenticated/admin/assets'
+      path: '/assets'
+      fullPath: '/admin/assets'
+      preLoaderRoute: typeof AuthenticatedAdminAssetsRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/_authenticated/admin/limits': {
       id: '/_authenticated/admin/limits'
       path: '/limits'
@@ -486,6 +506,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminAnalyticsRoute: typeof AuthenticatedAdminAnalyticsRoute
+  AuthenticatedAdminAssetsRoute: typeof AuthenticatedAdminAssetsRoute
   AuthenticatedAdminLimitsRoute: typeof AuthenticatedAdminLimitsRoute
   AuthenticatedAdminModerationRoute: typeof AuthenticatedAdminModerationRoute
   AuthenticatedAdminPaymentsRoute: typeof AuthenticatedAdminPaymentsRoute
@@ -499,6 +520,7 @@ interface AuthenticatedAdminRouteChildren {
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminAnalyticsRoute: AuthenticatedAdminAnalyticsRoute,
+  AuthenticatedAdminAssetsRoute: AuthenticatedAdminAssetsRoute,
   AuthenticatedAdminLimitsRoute: AuthenticatedAdminLimitsRoute,
   AuthenticatedAdminModerationRoute: AuthenticatedAdminModerationRoute,
   AuthenticatedAdminPaymentsRoute: AuthenticatedAdminPaymentsRoute,
