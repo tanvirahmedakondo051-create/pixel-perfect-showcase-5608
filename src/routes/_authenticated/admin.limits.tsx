@@ -21,10 +21,10 @@ function Limits() {
   const { data: s } = useSiteSettings();
   const reset = useServerFn(adminResetUsage);
   const [caps, setCaps] = useState<Record<string, number>>({});
-  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 8000, tokens_per_coin: 10000, free_block_publish: false, require_email_verify: false, single_pass_simple: true });
+  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 16000, tokens_per_coin: 10000, free_block_publish: false, require_email_verify: false, single_pass_simple: false });
   const [confirm, setConfirm] = useState(false);
   useEffect(() => { if (plans) setCaps(Object.fromEntries(plans.map((p) => [p.id, p.tokens_per_day]))); }, [plans]);
-  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, tokens_per_coin: (s as any).tokens_per_coin ?? 10000, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify, single_pass_simple: (s as any).single_pass_simple ?? true }); }, [s]);
+  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, tokens_per_coin: (s as any).tokens_per_coin ?? 10000, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify, single_pass_simple: (s as any).single_pass_simple ?? false }); }, [s]);
 
   async function save() {
     for (const [id, v] of Object.entries(caps)) await supabase.from("plans").update({ tokens_per_day: +v }).eq("id", id);
@@ -55,7 +55,7 @@ function Limits() {
         </div>
         <div className="mt-3 space-y-2">
           <Toggle label="ফ্রি ইউজাররা প্রকাশ করতে পারবে না" checked={g.free_block_publish} onChange={(v) => setG({ ...g, free_block_publish: v })} />
-          <Toggle label="ছোট সাইট এক ধাপে বানাও (কম কয়েন)" checked={g.single_pass_simple} onChange={(v) => setG({ ...g, single_pass_simple: v })} />
+          <Toggle label="ছোট সাইট এক ধাপে বানাও (কম কয়েন, কম ডিটেইল)" checked={g.single_pass_simple} onChange={(v) => setG({ ...g, single_pass_simple: v })} />
           <Toggle label="ইমেইল যাচাই ছাড়া বানানো যাবে না" checked={g.require_email_verify} onChange={(v) => setG({ ...g, require_email_verify: v })} />
         </div>
       </Panel>
