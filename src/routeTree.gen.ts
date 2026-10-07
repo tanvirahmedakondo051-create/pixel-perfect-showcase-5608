@@ -37,6 +37,8 @@ import { Route as UploadsProjectIdFileRouteImport } from './routes/uploads.$proj
 import { Route as AuthenticatedAdminPlansIndexRouteImport } from './routes/_authenticated/admin.plans.index'
 import { Route as AuthenticatedAdminPlansIdRouteImport } from './routes/_authenticated/admin.plans.$id'
 import { Route as ApiPublicCronExpiryRouteImport } from './routes/api/public/cron/expiry'
+import { Route as ApiPublicDbProjectIdAuthRouteImport } from './routes/api/public/db.$projectId.auth'
+import { Route as ApiPublicDbProjectIdTTableRouteImport } from './routes/api/public/db.$projectId.t.$table'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -188,6 +190,18 @@ const ApiPublicCronExpiryRoute = ApiPublicCronExpiryRouteImport.update({
   path: '/api/public/cron/expiry',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicDbProjectIdAuthRoute =
+  ApiPublicDbProjectIdAuthRouteImport.update({
+    id: '/api/public/db/$projectId/auth',
+    path: '/api/public/db/$projectId/auth',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicDbProjectIdTTableRoute =
+  ApiPublicDbProjectIdTTableRouteImport.update({
+    id: '/api/public/db/$projectId/t/$table',
+    path: '/api/public/db/$projectId/t/$table',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -217,6 +231,8 @@ export interface FileRoutesByFullPath {
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
+  '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -245,6 +261,8 @@ export interface FileRoutesByTo {
   '/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/admin/plans': typeof AuthenticatedAdminPlansIndexRoute
+  '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -276,6 +294,8 @@ export interface FileRoutesById {
   '/_authenticated/admin/plans/$id': typeof AuthenticatedAdminPlansIdRoute
   '/api/public/cron/expiry': typeof ApiPublicCronExpiryRoute
   '/_authenticated/admin/plans/': typeof AuthenticatedAdminPlansIndexRoute
+  '/api/public/db/$projectId/auth': typeof ApiPublicDbProjectIdAuthRoute
+  '/api/public/db/$projectId/t/$table': typeof ApiPublicDbProjectIdTTableRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -307,6 +327,8 @@ export interface FileRouteTypes {
     | '/admin/plans/$id'
     | '/api/public/cron/expiry'
     | '/admin/plans/'
+    | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/t/$table'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -335,6 +357,8 @@ export interface FileRouteTypes {
     | '/admin/plans/$id'
     | '/api/public/cron/expiry'
     | '/admin/plans'
+    | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/t/$table'
   id:
     | '__root__'
     | '/'
@@ -365,6 +389,8 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/plans/$id'
     | '/api/public/cron/expiry'
     | '/_authenticated/admin/plans/'
+    | '/api/public/db/$projectId/auth'
+    | '/api/public/db/$projectId/t/$table'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -381,6 +407,8 @@ export interface RootRouteChildren {
   OauthGithubReturnRoute: typeof OauthGithubReturnRoute
   UploadsProjectIdFileRoute: typeof UploadsProjectIdFileRoute
   ApiPublicCronExpiryRoute: typeof ApiPublicCronExpiryRoute
+  ApiPublicDbProjectIdAuthRoute: typeof ApiPublicDbProjectIdAuthRoute
+  ApiPublicDbProjectIdTTableRoute: typeof ApiPublicDbProjectIdTTableRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -581,6 +609,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicCronExpiryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/db/$projectId/auth': {
+      id: '/api/public/db/$projectId/auth'
+      path: '/api/public/db/$projectId/auth'
+      fullPath: '/api/public/db/$projectId/auth'
+      preLoaderRoute: typeof ApiPublicDbProjectIdAuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/db/$projectId/t/$table': {
+      id: '/api/public/db/$projectId/t/$table'
+      path: '/api/public/db/$projectId/t/$table'
+      fullPath: '/api/public/db/$projectId/t/$table'
+      preLoaderRoute: typeof ApiPublicDbProjectIdTTableRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -646,6 +688,8 @@ const rootRouteChildren: RootRouteChildren = {
   OauthGithubReturnRoute: OauthGithubReturnRoute,
   UploadsProjectIdFileRoute: UploadsProjectIdFileRoute,
   ApiPublicCronExpiryRoute: ApiPublicCronExpiryRoute,
+  ApiPublicDbProjectIdAuthRoute: ApiPublicDbProjectIdAuthRoute,
+  ApiPublicDbProjectIdTTableRoute: ApiPublicDbProjectIdTTableRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
