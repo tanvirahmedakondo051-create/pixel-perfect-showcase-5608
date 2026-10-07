@@ -211,13 +211,27 @@ export const Route = createFileRoute("/api/public/generate")({
 
         const since = new Date(Date.now() - 60_000).toISOString();
         const { count: recent } = await db.from("usage_logs").select("id", { count: "exact", head: true }).eq("user_id", user.id).gte("created_at", since);
-        if (!resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return failJob(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
+        if (!job && !resumeCp && (recent ?? 0) >= ((profile.plans as any)?.rate_limit_per_minute ?? settings.rate_limit_per_minute) + 8) return failJob(429, "খুব দ্রুত অনুরোধ করছেন। এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।");
 
         const providers = await allowedProviders(db, profile.plans);
         if (!providers?.length) return failJob(503, "এখনো কোনো AI সংযুক্ত করা হয়নি। অ্যাডমিনের সাথে যোগাযোগ করুন।");
         const ordered = body.providerId
           ? [...providers.filter((p) => p.id === body.providerId), ...providers.filter((p) => p.id !== body.providerId)]
           : providers;
+
+        // Browser call: queue a background job and return at once. The database starts the runner, so closing the tab doesn't stop it.
+        if (!job && body.intent !== "ask") {
+          const { data: running } = await db.from("generation_jobs").select("id").eq("project_id", project.id).in("status", ["queued", "running"]).gte("heartbeat_at", new Date(Date.now() - 120_000).toISOString()).limit(1).maybeSingle();
+          if (running) return Response.json({ jobId: running.id, existing: true });
+          const { appOrigin: ao } = await import("@/lib/origin.server");
+          let origin = ao();
+          const pm = origin.match(/^https:\/\/id-preview--([0-9a-f-]{36})\.lovable\.app$/);
+          if (pm) origin = `https://project--${pm[1]}-dev.lovable.app`;
+          const { data: nj, error: je } = await db.from("generation_jobs").insert({ project_id: project.id, user_id: user.id, mode: body.mode, input: body as any, origin }).select("id").single();
+          if (je || !nj) return json(500, "সার্ভারে সমস্যা হয়েছে");
+          await db.rpc("kick_job" as any, { _id: nj.id } as any);
+          return Response.json({ jobId: nj.id });
+        }
 
         // Asset library: only for new builds, short list of small/URL assets (keeps system prompt small).
         const { data: libAssets } = project.code_html ? { data: [] as any[] } : await db.from("assets").select("name, category, type, url_or_code").neq("category", "icon").order("created_at", { ascending: false }).limit(20);
