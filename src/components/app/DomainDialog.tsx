@@ -7,7 +7,7 @@ import { useSiteSettings } from "@/lib/site";
 import { checkCustomDomain, setCustomDomain } from "@/lib/user.functions";
 import { bnDate } from "@/lib/auth";
 
-type P = { id: string; custom_domain: string | null; domain_status: string; domain_found_ns: string[]; domain_checked_at: string | null };
+type P = { id: string; custom_domain: string | null; domain_status: string; domain_found_ns: string[]; domain_checked_at: string | null; dns_status?: string | null };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   pending: { label: "অপেক্ষমাণ", cls: "bg-warning/15 text-warning" },
@@ -26,7 +26,9 @@ export function DomainDialog({ open, onOpenChange, project, onChanged }: { open:
   const check = useServerFn(checkCustomDomain);
   const [domain, setDomain] = useState(project.custom_domain ?? "");
   const [busy, setBusy] = useState<"save" | "check" | "remove" | null>(null);
+  const [dns, setDns] = useState<string | null>(project.dns_status ?? null);
   useEffect(() => { setDomain(project.custom_domain ?? ""); }, [project.custom_domain]);
+  useEffect(() => { if (project.dns_status) setDns(project.dns_status); }, [project.dns_status]);
   const s: any = settings;
   const ns: string[] = [s?.ns1, s?.ns2, s?.ns3, s?.ns4].filter(Boolean);
 
@@ -35,8 +37,9 @@ export function DomainDialog({ open, onOpenChange, project, onChanged }: { open:
   async function doSave() {
     setBusy("save");
     try {
-      const r = await save({ data: { id: project.id, domain } });
+      const r = await save({ data: { id: project.id, domain: domain || project.custom_domain } });
       if ("error" in r) return toast.error(r.error);
+      setDns(r.dns);
       toast.success("ডোমেইন সেভ হয়েছে। এখন নেমসার্ভার বদলান।");
       onChanged();
     } finally { setBusy(null); }
@@ -105,6 +108,10 @@ export function DomainDialog({ open, onOpenChange, project, onChanged }: { open:
                   <span className="font-en text-sm">{project.custom_domain}</span>
                   <DomainStatusBadge status={project.domain_status} />
                 </div>
+                {project.custom_domain && dns === "ok" && <p className="mt-2 text-xs text-success">DNS তৈরি হয়েছে ✅</p>}
+                {project.custom_domain && dns === "error" && (
+                  <button disabled={!!busy} onClick={doSave} className="mt-2 text-xs text-destructive underline">DNS তৈরি ব্যর্থ — আবার চেষ্টা করুন</button>
+                )}
                 {project.domain_found_ns?.length > 0 && project.domain_status !== "connected" && (
                   <p className="mt-2 text-xs text-muted-foreground">এখন পাওয়া নেমসার্ভার: <span className="font-en">{project.domain_found_ns.join(", ")}</span></p>
                 )}
