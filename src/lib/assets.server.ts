@@ -132,14 +132,11 @@ export function replaceEmoji(html: string): { html: string; count: number } {
   }).join("");
   return { html: count ? out.replace(/(>)[ \t]+(<img [^>]*hx-emoji-icon)/g, "$1$2") : out, count };
 }
-let lastEmojiCount = 0;
-export const emojiReplacedLast = () => lastEmojiCount;
 
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
   let n = 0;
   const em = replaceEmoji(html);
-  lastEmojiCount = em.count;
   html = em.html;
   let s = html.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a) => (n++ === 0 ? m : `<img loading="lazy" decoding="async"${a}>`));
   s = s.replace(/(https:\/\/images\.unsplash\.com\/photo-[\w-]+)(?![\w?=&-]*[?&]w=)(\?[^"'\s)]*)?/g, (_m, base, q) => `${base}${q ? q + "&" : "?"}auto=format&fit=crop&w=1600&q=75`);

@@ -738,7 +738,7 @@ The user asked for ${wantPages.length} pages: ${wantPages.join(", ")}. You MUST 
                         const added = missing.filter((x) => now.has(x));
                         const navLink = html.match(/<a\b[^>]*href=["']#\/[\w-]*["'][^>]*>[\s\S]*?<\/a>/i)?.[0];
                         if (navLink && added.length) {
-                          const links = added.filter((x) => !new RegExp(`href=["']#/${x}["']`).test(html)).map((x) => navLink.replace(/href=["']#\/[\w-]*["']/, `href="#/${x}"`).replace(/>[\s\S]*?<\/a>$/, `>${x}</a>`)).join("");
+                          const links = added.filter((x) => !new RegExp(`href=["']#/${x}["']`).test(html)).map((x) => navLink.replace(/href=["']#\/[\w-]*["']/, `href="#/${x}"`).replace(/>[\s\S]*?<\/a>$/, `>${({ home: "হোম", about: "আমাদের সম্পর্কে", contact: "যোগাযোগ", menu: "মেনু", services: "সার্ভিস", gallery: "গ্যালারি", blog: "ব্লগ", pricing: "প্রাইসিং", team: "টিম", faq: "প্রশ্নোত্তর", shop: "দোকান", portfolio: "পোর্টফোলিও" } as Record<string, string>)[x] ?? x}</a>`)).join("");
                           if (links) html = html.replace(navLink, navLink + links);
                         }
                         html = postProcessAssets(html);
