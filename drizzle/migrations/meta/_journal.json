@@ -43,6 +43,13 @@
       "when": 1791400241923,
       "tag": "0005_site_users_google",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791433098365,
+      "tag": "0006_taste_pack_and_qa",
+      "breakpoints": true
     }
   ]
 }
