@@ -318,7 +318,14 @@ export const Route = createFileRoute("/api/public/generate")({
           } catch (e) { console.error("[auto-backend]", e); }
         }
         const beCtx = (project as any).backend_enabled ? await backendContext(db, project.id, isReact) : "";
-        const buildSystem = (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + freeAssets + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
+        const { requestedPages } = await import("@/lib/verify.server");
+        const wantPages = isReact ? [] : requestedPages(prompt + "\n" + (planMsg?.content ?? ""));
+        const MULTIPAGE_RULE = wantPages.length ? `### MULTI-PAGE — HIGHEST PRIORITY (MUST FOLLOW) ###
+The user asked for ${wantPages.length} pages: ${wantPages.join(", ")}. You MUST output exactly ${wantPages.length} top-level <section data-page="NAME"> blocks with these names: ${wantPages.map((x) => `data-page="${x}"`).join(", ")} (home first). Each page is a full page with its own rich content. A single long page is NOT acceptable. Header/footer stay outside the data-page blocks and the nav links use href="#/NAME" (home = "#/"). Do not write your own router.
+### END MULTI-PAGE ###
+
+` : "";
+        const buildSystem = MULTIPAGE_RULE + (s2.build_prompt || settings.system_prompt || "") + skillCtx + STRICT_RULE + freeAssets + (assetCtx ? `\n\nASSET LIBRARY (use when it fits):\n${assetCtx}` : "") + beCtx;
         const hasSite = !isPlan && !!project.code_html;
         const ctx = hasSite ? relevantContext(project.code_html, prompt) : null;
         const recentMsgs = recentHist.filter((m) => m.role === "user").slice(-2).map((m) => ({ role: "user", content: m.content.slice(0, 600) }));
@@ -697,16 +704,59 @@ export const Route = createFileRoute("/api/public/generate")({
               html = "";
               send({ t: "error", msg: "AI সঠিক ওয়েবসাইট দেয়নি। অন্যভাবে লিখে আবার চেষ্টা করুন।" });
             } else if (!isReact) {
-              const { postProcessAssets } = await import("@/lib/assets.server");
+              const { postProcessAssets, replaceEmoji } = await import("@/lib/assets.server");
+              const emojiCount = replaceEmoji(html).count;
               html = postProcessAssets(html);
               try {
                 send({ t: "progress", step: "সাইট চেক করছি...", tokens });
                 const { verifySite, reportText } = await import("@/lib/verify.server");
                 const v = await verifySite(db, html, appOrigin());
                 html = v.html;
+                v.report.emojiReplaced = emojiCount;
+                // Requested pages must exist; build any missing one in one small AI step.
+                if (wantPages.length) {
+                  const have = () => new Set([...html.matchAll(/data-page=["']([\w-]+)["']/g)].map((m) => m[1].toLowerCase()));
+                  let missing = wantPages.filter((x) => !have().has(x));
+                  if (missing.length && coinsLeft > 0) {
+                    send({ t: "progress", step: `বাকি পেজ বানাচ্ছি: ${missing.join(", ")}`, tokens });
+                    const hd = (html.match(/<head[\s\S]*?<\/head>/i)?.[0] ?? "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/\s+/g, " ").slice(0, 10000);
+                    const mr = await run([
+                      { role: "system", content: `You add missing pages to an existing Bangla multi-page website. Output ONLY raw HTML: one top-level <section data-page="NAME"> per requested page, each with rich, real Bangla content (several inner blocks). No <html>/<head>/<body>, no markdown, no explanation, no emoji. Reuse the existing CSS classes, colors and fonts.` },
+                      { role: "user", content: `Existing <head>:\n${hd}\n\nWebsite request: ${prompt}\n\nWrite these missing pages now: ${missing.map((x) => `data-page="${x}"`).join(", ")}` },
+                    ], true);
+                    if (mr) {
+                      tokens += mr.tokens;
+                      await charge(mr.tokens, 0, "বাকি পেজ: " + missing.join(", "));
+                      const frag = cleanFrag(mr.full);
+                      if (frag) {
+                        const all = [...html.matchAll(/<section\b[^>]*data-page=[\s\S]*?<\/section>/gi)];
+                        const lastEnd = all.length ? (all[all.length - 1].index! + all[all.length - 1][0].length) : -1;
+                        html = lastEnd > 0 ? html.slice(0, lastEnd) + "\n" + frag + html.slice(lastEnd) : html.replace(/<footer\b/i, frag + "\n<footer") ;
+                        if (!html.includes(frag)) html = html.replace(/<\/body>(?![\s\S]*<\/body>)/i, frag + "\n</body>");
+                        // Add nav links for new pages.
+                        const now = have();
+                        const added = missing.filter((x) => now.has(x));
+                        const navLink = html.match(/<a\b[^>]*href=["']#\/[\w-]*["'][^>]*>[\s\S]*?<\/a>/i)?.[0];
+                        if (navLink && added.length) {
+                          const links = added.filter((x) => !new RegExp(`href=["']#/${x}["']`).test(html)).map((x) => navLink.replace(/href=["']#\/[\w-]*["']/, `href="#/${x}"`).replace(/>[\s\S]*?<\/a>$/, `>${({ home: "হোম", about: "আমাদের সম্পর্কে", contact: "যোগাযোগ", menu: "মেনু", services: "সার্ভিস", gallery: "গ্যালারি", blog: "ব্লগ", pricing: "প্রাইসিং", team: "টিম", faq: "প্রশ্নোত্তর", shop: "দোকান", portfolio: "পোর্টফোলিও" } as Record<string, string>)[x] ?? x}</a>`)).join("");
+                          if (links) html = html.replace(navLink, navLink + links);
+                        }
+                        html = postProcessAssets(html);
+                      }
+                    }
+                    missing = wantPages.filter((x) => !have().has(x));
+                  }
+                  v.report.requested = wantPages.length;
+                  v.report.missingPages = missing;
+                }
                 const { screenshotQa } = await import("@/lib/qa.server");
                 const qa = await screenshotQa(db, usedProvider ?? ordered[0], html);
                 if (qa) { tokens += qa.tokens; html = postProcessAssets(qa.html); v.report.qa = qa.summary || undefined; }
+                if ((project as any).backend_enabled) {
+                  const { hasLoginButton, injectLoginButton } = await import("@/lib/verify.server");
+                  if (hasLoginButton(html)) v.report.loginButton = "ok";
+                  else { html = injectLoginButton(html); v.report.loginButton = "added"; }
+                }
                 verifyNote = reportText(v.report);
               } catch (e) { console.error("verify", e); }
             }
