@@ -41,6 +41,7 @@ type Att = { path: string; url: string; name: string; type: string };
 type Msg = ChatMsg;
 const LINK_RE = /https?:\/\/[^\s<>"']+|www\.[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i;
 const OPT_RE = /\[\[(.+?)\]\]/g;
+const isRealPlan = (t: string) => /##\s*(অংশসমূহ|ফিচার|ডিজাইন)/.test(t);
 const chips = ["রেস্টুরেন্ট সাইট", "পোর্টফোলিও", "অনলাইন শপ", "বিয়ের দাওয়াত পেজ"];
 
 function Builder() {
@@ -234,7 +235,7 @@ function Builder() {
         const fallback: Msg = m0 === "plan" ? { role: "assistant", content: ev.plan || "", mode: "plan" } : { role: "assistant", content: ev.html ? "✓ ওয়েবসাইট তৈরি হয়েছে" : "দুঃখিত, এবার হয়নি", mode: "build" };
         const msg = ev.msg ?? fallback;
         setMessages((m) => [...m.map((x) => (resumeId && x.checkpointId === resumeId ? { ...x, resumed: true } : x)), msg]);
-        if (m0 === "plan" && msg.content) setPlanView(msg.content);
+        if (m0 === "plan" && msg.content && isRealPlan(msg.content)) setPlanView(msg.content);
         else toast.success("সেভ হয়েছে ✓");
         qc.invalidateQueries({ queryKey: ["project", projectId] });
         qc.invalidateQueries({ queryKey: ["projects"] });
@@ -263,7 +264,7 @@ function Builder() {
     }
   };
 
-  const exec = async (text0: string, m0: "plan" | "build", files: Att[], resumeId?: string) => {
+  const exec = async (text0: string, m0: "plan" | "build", files: Att[], resumeId?: string, planId?: string) => {
     if (streaming) return;
     if (resumeId && coins <= 0) return toast.error(outMsg);
     if (!resumeId) setMessages((m) => [...m, { role: "user", content: text0, mode: m0, at: new Date().toISOString(), files: files.map((f) => ({ name: f.name, url: f.url, type: f.type })) }]);
@@ -279,7 +280,7 @@ function Builder() {
       const res = await fetch("/api/public/generate", {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` },
-        body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files, resumeId: resumeId ?? null }),
+        body: JSON.stringify({ projectId, prompt: text0, providerId: providerId || null, mode: m0, attachments: files, resumeId: resumeId ?? null, planId: planId ?? null }),
       });
       const j = await res.json().catch(() => ({ error: "কিছু একটা সমস্যা হয়েছে" }));
       if (!res.ok || !j.jobId) {
@@ -348,9 +349,12 @@ function Builder() {
     URL.revokeObjectURL(a.href);
   };
 
-  const approvePlan = (planText: string) => {
+  const approvePlan = (planText: string, planId?: string) => {
     setMode("build");
-    send(`এই অনুমোদিত প্ল্যান অনুযায়ী সম্পূর্ণ ওয়েবসাইট বানাও:\n\n${planText.replace(OPT_RE, "").trim()}`, "build");
+    if (!planId) return send(`এই অনুমোদিত প্ল্যান অনুযায়ী সম্পূর্ণ ওয়েবসাইট বানাও:\n\n${planText.replace(OPT_RE, "").trim()}`, "build");
+    if (streaming) return;
+    if (coins <= 0) return toast.error(outMsg);
+    exec("✅ প্ল্যান অনুমোদিত — বানানো শুরু হচ্ছে...", "build", [], undefined, planId);
   };
 
   const runLive = async () => {
@@ -587,9 +591,15 @@ function Builder() {
                           ))}
                         </div>
                       )}
-                      <button onClick={() => setPlanView(m.content)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm"><FileText className="size-4" /> প্ল্যান খুলুন</button>
-                      {i === messages.length - 1 && !streaming && /অনুমোদন|\n\s*\d+[.)]/.test(m.content) && (
-                        <button onClick={() => approvePlan(m.content)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
+                      {i === messages.length - 1 && !streaming && !isRealPlan(m.content) && [...m.content.matchAll(OPT_RE)].length > 0 && (
+                        <form className="mt-2 flex gap-1.5" onSubmit={(e) => { e.preventDefault(); const v = String(new FormData(e.currentTarget).get("a") ?? "").trim(); if (v) send(v, "plan"); }}>
+                          <input name="a" placeholder="✏️ নিজের মতো লিখুন" className="min-h-10 min-w-0 flex-1 rounded-full border border-border bg-transparent px-3 text-sm outline-none focus:border-cyan" />
+                          <button className="min-h-10 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground">পাঠান</button>
+                        </form>
+                      )}
+                      {isRealPlan(m.content) && <button onClick={() => setPlanView(m.content)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm"><FileText className="size-4" /> প্ল্যান খুলুন</button>}
+                      {i === messages.length - 1 && !streaming && isRealPlan(m.content) && (
+                        <button onClick={() => approvePlan(m.content, m.id)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
                       )}
                     </>
                   ) : undefined}>
@@ -698,7 +708,7 @@ function Builder() {
           <PlanDialog
             plan={planView}
             onClose={() => setPlanView(null)}
-            onApprove={() => { const p = planView; setPlanView(null); if (p) approvePlan(p); }}
+            onApprove={() => { const p = planView; setPlanView(null); if (p) approvePlan(p, messages.find((x) => x.mode === "plan" && x.content === p)?.id); }}
             onChange={() => { setPlanView(null); setMode("plan"); taRef.current?.focus(); }}
           />
           <Dialog open={skillOpen} onOpenChange={setSkillOpen}>

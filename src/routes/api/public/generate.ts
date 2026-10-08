@@ -9,12 +9,14 @@ const Body = z.object({
   intent: z.enum(["run", "ask"]).optional().default("run"),
   resumeId: z.string().uuid().optional().nullable(),
   chained: z.boolean().optional(),
+  planId: z.string().max(80).optional().nullable(),
   attachments: z.array(z.object({ path: z.string().max(200), url: z.string().url().max(400), name: z.string().max(120), type: z.string().max(60) })).max(4).optional().default([]),
 });
 
 const PLAN_FORMAT = `
 
-FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]].`;
+FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]] (3-4 options) and do NOT use the plan headings.
+NEVER ask which backend/database/stack/hosting to use — Hexarly has a built-in backend (hexaDB: tables, visitor login, Google login) that is set up automatically.`;
 
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
@@ -54,7 +56,13 @@ STRICT OUTPUT RULE (MUST FOLLOW):
 
 STYLE INSPIRATION: If the user provides an analyzed website (colors, fonts, layout), use the analyzed colors, fonts, and layout style as inspiration. Create ORIGINAL content, do not copy text or images.
 
-ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.`;
+ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.
+
+IMAGES: Use ONLY photo URLs given in this prompt (PHOTOS list / user uploads / asset library). NEVER invent or guess image URLs (no made-up images.unsplash.com IDs, no placeholder services). If no photo fits, use gradient/SVG visuals.
+
+MULTI-PAGE: If the user asks for several pages (e.g. About, Contact), keep one HTML file: wrap each page in <section data-page="home|about|contact|..."> (first = home) and link with href="#/about", "#/" etc. A built-in router shows one page at a time and handles back/forward — do not write your own router. Single-page sites use normal #id anchors.
+
+BACKEND: Hexarly has a built-in backend (hexaDB: tables, visitor login/sign-up, Google login). Never mention or ask about backend technology, databases, Firebase, PHP, hosting or stacks.`;
 
 const REACT_RULE = `
 
@@ -196,7 +204,11 @@ export const Route = createFileRoute("/api/public/generate")({
           resumeCp = data;
           body.mode = "build";
         }
-        const prompt: string = resumeCp ? resumeCp.prompt : body.prompt;
+        // Approved plan: the plan text is loaded server-side; the chat only shows a short approval line.
+        const planMsg = !resumeCp && body.planId ? ((project.messages as any[]) ?? []).find((m) => m.id === body.planId && m.mode === "plan" && m.role === "assistant") : null;
+        if (body.planId && !resumeCp && !planMsg) return failJob(404, "প্ল্যানটি পাওয়া যায়নি");
+        const prompt: string = resumeCp ? resumeCp.prompt : planMsg ? `এই অনুমোদিত প্ল্যান অনুযায়ী সম্পূর্ণ ওয়েবসাইট বানাও:\n\n${String(planMsg.content).replace(/\[\[(.+?)\]\]/g, "").trim()}` : body.prompt;
+        const shownPrompt: string = planMsg ? body.prompt || "✅ প্ল্যান অনুমোদিত — বানানো শুরু হচ্ছে..." : prompt;
         if (!prompt.trim()) return failJob(400, "অনুরোধটি সঠিক নয়");
         if (settings.require_email_verify && !user.email_confirmed_at) return failJob(403, "আগে ইমেইল ভেরিফাই করুন");
 
@@ -253,7 +265,8 @@ export const Route = createFileRoute("/api/public/generate")({
         const history = (project.messages as Msg[]) ?? [];
         const isPlan = body.mode === "plan";
         const s2 = settings as any;
-        const { relevantContext, outline, applyPatches, DIFF_RULE } = await import("@/lib/context.server");
+        const { relevantContext, outline, applyPatches, applySections, tagSections, SECTION_RULE, DIFF_RULE } = await import("@/lib/context.server");
+        if (project.code_html && body.mode !== "plan" && (project as any).project_type !== "react") project.code_html = tagSections(project.code_html);
         const { data: sum } = await db.from("chat_summaries").select("summary_text, up_to_message_id").eq("project_id", project.id).order("up_to_message_id", { ascending: false }).limit(1).maybeSingle();
         const summaryMsg = sum ? [{ role: "system", content: `CHAT SUMMARY SO FAR: ${sum.summary_text}` }] : [];
         const recentHist = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
@@ -317,7 +330,7 @@ export const Route = createFileRoute("/api/public/generate")({
           { role: "user", content: withExtra(prompt) },
         ];
         const diffMessages = hasSite ? [
-          { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
+          { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + SECTION_RULE + "\n\nIf a change cannot be expressed as whole blocks, you may instead use:" + DIFF_RULE },
           ...summaryMsg,
           ...recentMsgs,
           { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${prompt}`) },
@@ -333,7 +346,7 @@ export const Route = createFileRoute("/api/public/generate")({
         if (body.intent === "ask") {
           // Detailed prompts or a chosen site type need no questions — saves a whole AI call.
           if (isPlan || project.code_html || isReact || prompt.trim().split(/\s+/).length >= 12 || (pack && prompt.trim().split(/\s+/).length >= 5)) return Response.json({ questions: [] });
-          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
+          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Never ask about backend, database, technology stack or hosting (built in). Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
           for (const p of ordered) {
             try {
               const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
@@ -490,7 +503,7 @@ export const Route = createFileRoute("/api/public/generate")({
             };
             const mid = () => crypto.randomUUID();
             const r2 = (n: number) => Math.round(n * 100) / 100;
-            const userMsg = (): Msg => ({ role: "user", content: prompt, at: new Date().toISOString(), mode: body.mode, id: mid(), files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) });
+            const userMsg = (): Msg => ({ role: "user", content: shownPrompt, at: new Date().toISOString(), mode: body.mode, id: mid(), files: atts.map((a) => ({ name: a.name, url: a.url, type: a.type })) });
 
             if (isPlan) {
               const r = await run(planMessages, true);
@@ -552,7 +565,7 @@ export const Route = createFileRoute("/api/public/generate")({
               const update: any = { messages: newMsgs, build_status: built ? "ready" : "failed", build_log: built ? "" : log };
               if (files) update.files = files;
               if (built) { update.code_html = built; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
-              if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);
+              if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = (planMsg ? shownPrompt : prompt).slice(0, 40);
               await db.from("projects").update(update).eq("id", project.id);
               send({ t: "done", tokens: rTokens, html: built, msg: am, used, limit, coins: r2(chargedCoins), balance: Math.max(0, coinsLeft), ms: am.ms });
               await finishSummary(newMsgs);
@@ -664,7 +677,7 @@ export const Route = createFileRoute("/api/public/generate")({
               if (r) {
                 tokens = r.tokens;
                 baseTokens = tokens;
-                const patched = applyPatches(project.code_html, r.full);
+                const patched = applySections(project.code_html, r.full) ?? applyPatches(project.code_html, r.full);
                 if (patched && /<\w+/.test(patched.html)) {
                   html = patched.html;
                   const fullCost = Math.ceil((JSON.stringify(fullMessages).length + project.code_html.length) / 4);
@@ -694,13 +707,13 @@ export const Route = createFileRoute("/api/public/generate")({
             const now = new Date().toISOString();
             const unpaid = Math.max(0, tokens - Math.round(chargedCoins * tpc));
             const finalCoins = r2(chargedCoins + unpaid / tpc);
-            const am: Msg = { role: "assistant", content: html ? (resumeCp && !body.chained ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: prompt.slice(0, 50) };
+            const am: Msg = { role: "assistant", content: html ? (resumeCp && !body.chained ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: (planMsg ? "প্ল্যান অনুযায়ী বিল্ড" : prompt).slice(0, 50) };
             const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
             if (html && (project as any).backend_enabled) html = injectBackend(html, appOrigin(), project.id);
             if (html) { update.code_html = html; if (project.is_published) update.changes_since_publish = ((project as any).changes_since_publish ?? 0) + 1; }
             if (hit) Object.assign(update, { is_flagged: true, flag_reason: `কীওয়ার্ড: ${hit.keyword}`, is_published: false });
-            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = prompt.slice(0, 40);
+            if (project.name === "নতুন প্রজেক্ট" && !history.length) update.name = (planMsg ? shownPrompt : prompt).slice(0, 40);
 
             await Promise.all([db.from("projects").update(update).eq("id", project.id), unpaid > 0 ? charge(unpaid, saved) : null]);
             const savedPct = saved ? Math.round((saved / (saved + tokens)) * 100) : 0;
