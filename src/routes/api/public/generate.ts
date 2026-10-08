@@ -29,6 +29,7 @@ PREMIUM QUALITY (TOP PRIORITY — never trade quality for brevity):
 - 6-8 rich sections with real Bangla content depth (no 2-line filler): e.g. services/features with details, stats/numbers, process steps, showcase/gallery, testimonials, FAQ, contact form — vary layouts (grids, split, bento, timeline).
 - Smooth scroll-reveal animations (IntersectionObserver), hover lift/glow on cards and buttons, smooth scrolling, sticky blurred header with mobile menu.
 - Professional typography scale, generous spacing, consistent color system, icons, badges, dividers, styled footer with links.
+- Stats/counters: write the REAL final number in the HTML text (e.g. <span data-count="500">৫০০</span>+), never 0 — a built-in script animates elements with data-count, do not write your own counter.
 - Complete, polished code; no placeholders, no lorem ipsum, no inline base64 images.
 - ANIMATED HERO BACKGROUND (required, never a flat color). Built-in classes are auto-included, do NOT write their CSS:
   a) Mesh: hero has position:relative;overflow:hidden; first child <div class="hx-mesh" aria-hidden="true"><span></span><span></span></div>; hero content gets position:relative;z-index:1.
@@ -42,6 +43,22 @@ function cleanFrag(t: string) {
   const a = s.search(/<(section|footer|div|header|nav|main)/i);
   if (a > 0) s = s.slice(a);
   return s.trim();
+}
+
+const PAGE_BN: Record<string, string> = { home: "হোম", about: "আমাদের সম্পর্কে", menu: "মেনু", contact: "যোগাযোগ", services: "সেবা", gallery: "গ্যালারি", blog: "ব্লগ", shop: "শপ", pricing: "প্রাইসিং", team: "টিম", booking: "বুকিং", courses: "কোর্স", portfolio: "পোর্টফোলিও", faq: "FAQ" };
+const PAGE_RX: [string, RegExp][] = [
+  ["about", /আমাদের সম্পর্কে|সম্পর্কে|about/iu], ["menu", /মেনু|menu/iu], ["services", /সেবা|সার্ভিস|services?/iu],
+  ["gallery", /গ্যালারি|gallery/iu], ["blog", /ব্লগ|blog/iu], ["shop", /শপ পেজ|প্রোডাক্ট পেজ|shop page|products? page/iu],
+  ["pricing", /প্রাইসিং|মূল্য তালিকা|pricing/iu], ["team", /টিম পেজ|team page/iu], ["booking", /বুকিং পেজ|booking page/iu],
+  ["courses", /কোর্স পেজ|courses? page/iu], ["portfolio", /পোর্টফোলিও পেজ|portfolio page/iu], ["faq", /faq পেজ|faq page/iu],
+  ["contact", /যোগাযোগ|কন্টাক্ট|contact/iu],
+];
+/** Pages the user explicitly asked for ("... পেজ সহ", "pages: ..."). Returns [] for single-page requests. */
+function detectPages(text: string): string[] {
+  if (!/পেজ|পাতা|pages?\b|multi-?page|মাল্টি/iu.test(text)) return [];
+  const found = PAGE_RX.filter(([, re]) => re.test(text)).map(([n]) => n);
+  if (!found.length) return [];
+  return ["home", ...found.filter((n) => n !== "home")].slice(0, 6);
 }
 
 function dhakaToday() {
@@ -592,7 +609,13 @@ export const Route = createFileRoute("/api/public/generate")({
                 // No separate outline call: steps are decided locally (1 step for simple sites, 2 grouped steps otherwise).
                 baseHistory = [...history, userMsg()];
                 const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length >= 120;
-                steps = complex
+                const pageList = detectPages(prompt + " " + (planMsg?.content ?? ""));
+                console.log("build pages detected", project.id, pageList.join(",") || "(single page)");
+                steps = pageList.length >= 2
+                  ? pageList.map((pg, i) => i === 0
+                      ? { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ ও মেনু`, brief: `MULTI-PAGE SITE with pages: ${pageList.join(", ")}. Sticky header/nav (with mobile menu) OUTSIDE all pages, with links href="#/" for home and href="#/${pageList.slice(1).join('", "#/')}" for the others. Then <section data-page="${pg}"> containing the full home page: premium animated hero plus 3-4 rich sections. Put the marker comment IMMEDIATELY after the closing tag of the home data-page section, and the rich footer after that marker (outside all pages).` }
+                      : { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ`, brief: `ONE wrapper <section data-page="${pg}"> holding the complete, rich "${pg}" page (its own page hero/title + 2-4 detailed sections). Everything for this page must be INSIDE that one data-page wrapper.` })
+                  : complex
                   ? [
                       { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "sticky navigation header with mobile menu, a premium animated hero, and the 2 most important content sections, each with full content depth" },
                       { id: "mid", title: "মাঝের অংশগুলো", brief: "2-3 rich middle sections (e.g. stats, process steps, showcase/gallery, pricing) with varied layouts and hover/scroll animations" },
@@ -639,7 +662,7 @@ export const Route = createFileRoute("/api/public/generate")({
                     { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first. Match the hero polish: rich content, animations and hover effects.` + PREMIUM },
                     { role: "user", content: `Existing <head> (styles):\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY: ${s.brief}` },
                   ], true);
-                  if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
+                  if (r) { let frag = cleanFrag(r.full); const pg = s.id.startsWith("page-") ? s.id.slice(5) : ""; if (frag && pg && !new RegExp(`data-page=["']${pg}["']`).test(frag)) frag = `<section data-page="${pg}">\n${frag}\n</section>`; if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }
                 if (!r || !partial || sig.aborted) {
                   if (done.length || resumeCp) {
@@ -706,7 +729,13 @@ export const Route = createFileRoute("/api/public/generate")({
                 html = v.html;
                 const { screenshotQa } = await import("@/lib/qa.server");
                 const qa = await screenshotQa(db, usedProvider ?? ordered[0], html);
-                if (qa) { tokens += qa.tokens; html = postProcessAssets(qa.html); v.report.qa = qa.summary || undefined; }
+                if (qa) {
+                  tokens += qa.tokens;
+                  // Integrity guard: never accept a fix that introduced broken characters.
+                  const broke = (qa.html.match(/\uFFFD/gu)?.length ?? 0) > (html.match(/\uFFFD/gu)?.length ?? 0);
+                  if (!broke) html = postProcessAssets(qa.html); else console.warn("qa fix rejected: broken characters");
+                  v.report.qa = qa.summary || undefined;
+                }
                 verifyNote = reportText(v.report);
               } catch (e) { console.error("verify", e); }
             }
