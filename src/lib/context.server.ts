@@ -125,3 +125,55 @@ export function applyPatches(html: string, text: string): { html: string; count:
   }
   return count ? { html: out, count } : null;
 }
+
+/** Gives every top-level block (header/nav/section/footer/aside) a stable data-hx-id so edits can replace whole sections by ID. */
+export function tagSections(html: string): string {
+  const blocks = extractBlocks(html).filter((b) => b.tag !== "style");
+  const used = new Set([...html.matchAll(/data-hx-id="(s\d+)"/g)].map((m) => m[1]));
+  let n = 0;
+  const next = () => { do n++; while (used.has(`s${n}`)); used.add(`s${n}`); return `s${n}`; };
+  let out = html;
+  for (const b of [...blocks].reverse()) {
+    const open = out.slice(b.start, out.indexOf(">", b.start) + 1);
+    if (/data-hx-id=/.test(open)) continue;
+    out = out.slice(0, b.start) + open.replace(/^<(\w+)/, `<$1 data-hx-id="__ID__"`) + out.slice(b.start + open.length);
+  }
+  return out.replace(/data-hx-id="__ID__"/g, () => `data-hx-id="${next()}"`);
+}
+
+export const SECTION_RULE = `
+
+EDIT MODE (MUST FOLLOW): Each block you get has a data-hx-id. Return ONLY the blocks you change, each complete and corrected, wrapped like:
+<hx-section id="s3">
+<section data-hx-id="s3" ...>...full corrected block...</section>
+</hx-section>
+To add a new block after an existing one: <hx-section id="new" after="s3">...new block...</hx-section>
+To delete a block: <hx-section id="s4"></hx-section>
+Keep the data-hx-id attribute. No full HTML, no markdown fences, no explanation.`;
+
+/** Replaces whole blocks by data-hx-id. Returns null when nothing usable was returned. */
+export function applySections(html: string, text: string): { html: string; count: number } | null {
+  const re = /<hx-section\s+id="([\w-]+)"(?:\s+after="([\w-]+)")?\s*>([\s\S]*?)<\/hx-section>/g;
+  let out = html, count = 0, m: RegExpExecArray | null;
+  const find = (id: string) => {
+    const open = new RegExp(`<(\\w+)\\b[^>]*data-hx-id="${id}"[^>]*>`).exec(out);
+    if (!open) return null;
+    const end = matchEnd(out, open[1].toLowerCase(), open.index);
+    return end < 0 ? null : { start: open.index, end };
+  };
+  while ((m = re.exec(text))) {
+    const [, id, after, body] = m;
+    const content = body.trim();
+    if (id === "new") {
+      const loc = after ? find(after) : null;
+      if (!loc || !content) continue;
+      out = out.slice(0, loc.end) + "\n" + content + out.slice(loc.end);
+    } else {
+      const loc = find(id);
+      if (!loc) continue;
+      out = out.slice(0, loc.start) + content + out.slice(loc.end);
+    }
+    count++;
+  }
+  return count ? { html: out, count } : null;
+}

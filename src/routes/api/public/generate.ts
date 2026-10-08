@@ -260,7 +260,8 @@ export const Route = createFileRoute("/api/public/generate")({
         const history = (project.messages as Msg[]) ?? [];
         const isPlan = body.mode === "plan";
         const s2 = settings as any;
-        const { relevantContext, outline, applyPatches, DIFF_RULE } = await import("@/lib/context.server");
+        const { relevantContext, outline, applyPatches, applySections, tagSections, SECTION_RULE, DIFF_RULE } = await import("@/lib/context.server");
+        if (project.code_html && body.mode !== "plan" && (project as any).project_type !== "react") project.code_html = tagSections(project.code_html);
         const { data: sum } = await db.from("chat_summaries").select("summary_text, up_to_message_id").eq("project_id", project.id).order("up_to_message_id", { ascending: false }).limit(1).maybeSingle();
         const summaryMsg = sum ? [{ role: "system", content: `CHAT SUMMARY SO FAR: ${sum.summary_text}` }] : [];
         const recentHist = history.slice(Math.max(sum?.up_to_message_id ?? 0, history.length - 5));
@@ -324,7 +325,7 @@ export const Route = createFileRoute("/api/public/generate")({
           { role: "user", content: withExtra(prompt) },
         ];
         const diffMessages = hasSite ? [
-          { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + DIFF_RULE },
+          { role: "system", content: buildSystem.replace(/STRICT OUTPUT RULE[\s\S]*?explanation before or after\./, "") + SECTION_RULE + "\n\nIf a change cannot be expressed as whole blocks, you may instead use:" + DIFF_RULE },
           ...summaryMsg,
           ...recentMsgs,
           { role: "user", content: withExtra(`পেজের কাঠামো:\n${outline(project.code_html)}\n\n${ctx!.partial ? "প্রাসঙ্গিক অংশ" : "সম্পূর্ণ HTML"}:\n${ctx!.snippets.join("\n\n<!-- ... -->\n\n")}\n\nপরিবর্তনের অনুরোধ: ${prompt}`) },
@@ -671,7 +672,7 @@ export const Route = createFileRoute("/api/public/generate")({
               if (r) {
                 tokens = r.tokens;
                 baseTokens = tokens;
-                const patched = applyPatches(project.code_html, r.full);
+                const patched = applySections(project.code_html, r.full) ?? applyPatches(project.code_html, r.full);
                 if (patched && /<\w+/.test(patched.html)) {
                   html = patched.html;
                   const fullCost = Math.ceil((JSON.stringify(fullMessages).length + project.code_html.length) / 4);
