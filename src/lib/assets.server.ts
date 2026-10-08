@@ -104,6 +104,9 @@ function stripAiRouters(s: string) {
   return s.replace(/<script(?![^>]*\bsrc=)(?![^>]*data-hx)[^>]*>([\s\S]*?)<\/script>/gi, (m, body) => (/hashchange/.test(body) && /data-page/.test(body) ? "" : m));
 }
 
+/** Counters always show their real final number (never "0"); animate up when visible, re-run on page switch. */
+const COUNTERS = `<script data-hx-count>(function(){var BN="০১২৩৪৫৬৭৮৯";function toEn(s){return String(s).replace(/[০-৯]/g,function(d){return BN.indexOf(d)})}function fmt(n,bn){var s=Math.round(n).toLocaleString("en-US");return bn?s.replace(/[0-9]/g,function(d){return BN[d]}):s}var sel="[data-count],[data-target],[data-counter],.counter,.count-up,.stat-number,.stat-num,.counter-value";function setup(){document.querySelectorAll(sel).forEach(function(el){if(el.dataset.hxc)return;var raw=el.getAttribute("data-count")||el.getAttribute("data-target")||el.getAttribute("data-counter")||el.textContent;var m=toEn(raw).replace(/,/g,"").match(/\\d+(\\.\\d+)?/);if(!m)return;var t=parseFloat(m[0]);if(!t)return;var bn=/[০-৯]/.test(raw+el.textContent);var txt=el.textContent;var suf=(txt.match(/[^\\d০-৯,.\\s]+\\s*$/)||[""])[0];if(!suf&&!/\\d|[০-৯]/.test(txt))suf="";el.dataset.hxc="1";el.dataset.hxt=t;el.dataset.hxs=suf;el.dataset.hxb=bn?"1":"";el.textContent=fmt(t,bn)+suf})}function run(el){var t=+el.dataset.hxt,s=el.dataset.hxs,bn=!!el.dataset.hxb,st=null;if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;function f(ts){if(!st)st=ts;var p=Math.min(1,(ts-st)/1600);el.textContent=fmt(t*(1-Math.pow(1-p,3)),bn)+s;if(p<1)requestAnimationFrame(f);else el.textContent=fmt(t,bn)+s}requestAnimationFrame(f)}function watch(){setup();var els=[].slice.call(document.querySelectorAll("[data-hxc]"));if(!("IntersectionObserver" in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){io.unobserve(e.target);run(e.target)}})},{threshold:.3});els.forEach(function(el){io.observe(el)})}function go(){try{watch()}catch(e){}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(go,50)});else setTimeout(go,50);window.addEventListener("hashchange",function(){setTimeout(go,80)});window.addEventListener("load",function(){setTimeout(function(){document.querySelectorAll("[data-hxc]").forEach(function(el){if(/^\\s*0\\D*$/.test(el.textContent))el.textContent=fmt(+el.dataset.hxt,!!el.dataset.hxb)+el.dataset.hxs})},2500)})})();</script>`;
+
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
   let n = 0;
@@ -114,6 +117,8 @@ export function postProcessAssets(html: string) {
   if (/<lord-icon/i.test(s) && !/lordicon\.js/i.test(s)) head.push(`<script defer src="https://cdn.lordicon.com/lordicon.js"></script>`);
   if (/\bhx-(mesh|gradient)\b/.test(s) && !s.includes("data-hx-bg")) head.push(ANIMATED_BG_CSS);
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
+  s = s.replace(/<script data-hx-count>[\s\S]*?<\/script>/g, "");
+  if (/data-count|data-target|data-counter|class=["'][^"']*\b(counter|count-up|stat-number|stat-num|counter-value)\b/.test(s)) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, COUNTERS + "\n</body>");
   if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
   // Background photos: put a brand gradient underneath so a failed photo never leaves an empty box.
   s = s.replace(/background-image\s*:\s*url\(([^)]+)\)(?!\s*,)/gi, (m, u) => (/linear-gradient/i.test(m) ? m : `background-image:url(${u}),linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))`));

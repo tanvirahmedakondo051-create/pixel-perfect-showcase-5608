@@ -53,7 +53,7 @@ const PAGE_RX: [string, RegExp][] = [
   ["contact", /যোগাযোগ|কন্টাক্ট|contact/iu],
 ];
 /** Pages the user explicitly asked for ("... পেজ সহ", "pages: ..."). Returns [] for single-page requests. */
-export function detectPages(text: string): string[] {
+function detectPages(text: string): string[] {
   if (!/পেজ|পাতা|pages?\b|multi-?page|মাল্টি/iu.test(text)) return [];
   const found = PAGE_RX.filter(([, re]) => re.test(text)).map(([n]) => n);
   if (!found.length) return [];
