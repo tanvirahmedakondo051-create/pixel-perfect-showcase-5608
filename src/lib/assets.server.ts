@@ -122,7 +122,8 @@ export function replaceEmoji(html: string): { html: string; count: number } {
     count++;
     const name = EMOJI_ICON[key];
     if (inAttr || !name) return "";
-    return `<img src="https://api.iconify.design/${name}.svg?color=currentColor" width="20" height="20" alt="" aria-hidden="true" class="hx-icon hx-emoji-icon" style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-0.2em">`;
+    const u = `https://api.iconify.design/${name}.svg`;
+    return `<span aria-hidden="true" class="hx-emoji-icon" style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-0.2em;background:currentColor;-webkit-mask:url(${u}) center/contain no-repeat;mask:url(${u}) center/contain no-repeat"></span>`;
   };
   const parts = html.split(/(<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<head\b[\s\S]*?<\/head>|<[^>]+>)/i);
   const out = parts.map((p, i) => {
@@ -130,7 +131,7 @@ export function replaceEmoji(html: string): { html: string; count: number } {
     if (/^<(script|style|head)\b/i.test(p)) return p;
     return p.replace(/(\s(?:alt|title|aria-label|placeholder)=)(["'])([^"']*)\2/gi, (_m, a, q, v) => a + q + v.replace(EMOJI_RE, (m: string) => icon(m, true)).replace(/\s{2,}/g, " ").trim() + q);
   }).join("");
-  return { html: count ? out.replace(/(>)[ \t]+(<img [^>]*hx-emoji-icon)/g, "$1$2") : out, count };
+  return { html: count ? out.replace(/(>)[ \t]+(<span [^>]*hx-emoji-icon)/g, "$1$2") : out, count };
 }
 
 export function postProcessAssets(html: string) {
