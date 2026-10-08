@@ -97,6 +97,9 @@ export const ANIMATED_BG_CSS = `<style data-hx-bg>
 </style>`;
 
 /** Inject only the scripts the page uses, lazy-load images, size Unsplash URLs, add graceful fallbacks. */
+/** Hash router for multi-page sites: <section data-page="about"> shown at #/about; back/forward via native hash history. */
+const PAGES = `<script data-hx-pages>(function(){var P=[].slice.call(document.querySelectorAll("[data-page]"));if(!P.length)return;function go(){var h=(location.hash.match(/^#\\/([\\w-]*)/)||[])[1]||"";var n=h||P[0].getAttribute("data-page");if(!P.some(function(p){return p.getAttribute("data-page")===n})){if(!h)return;n=P[0].getAttribute("data-page")}P.forEach(function(p){p.hidden=p.getAttribute("data-page")!==n});document.querySelectorAll('a[href^="#/"]').forEach(function(a){var t=a.getAttribute("href").slice(2)||P[0].getAttribute("data-page");a.classList.toggle("active",t===n);if(t===n)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});window.scrollTo(0,0)}window.addEventListener("hashchange",go);go()})();</script>`;
+
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
   let n = 0;
@@ -108,5 +111,9 @@ export function postProcessAssets(html: string) {
   if (/\bhx-(mesh|gradient)\b/.test(s) && !s.includes("data-hx-bg")) head.push(ANIMATED_BG_CSS);
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
   if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
+  // Background photos: put a brand gradient underneath so a failed photo never leaves an empty box.
+  s = s.replace(/background(-image)?\s*:\s*url\(([^)]+)\)(?!\s*,)/gi, (m, _i, u) => (/linear-gradient/i.test(m) ? m : `background-image:url(${u}),linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))`));
+  s = s.replace(/<script data-hx-pages>[\s\S]*?<\/script>/g, "");
+  if (/data-page=/.test(s)) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, PAGES + "\n</body>");
   return s;
 }
