@@ -1,0 +1,20 @@
+# 7 fixes in one go
+
+## What users get
+1. **No broken photos:** the AI only uses photos from the checked photo library (or Pexels results). It may not make up photo links. Every photo except the top one loads lazily. A photo that fails turns into a soft colour fade. Background photos set in styles get a colour fade underneath, so a failed photo never leaves an empty box.
+2. **Questions stay in the chat:** when the AI asks something, the question shows in the chat with 3–4 quick-answer buttons and a "নিজের মতো লিখুন" box. The plan popup only opens for a real plan (one that has the sections/features/design headings).
+3. **Approve = build right away:** pressing approve no longer pastes the plan into the chat. The chat shows "✅ প্ল্যান অনুমোদিত — বানানো শুরু হচ্ছে..." and the build starts using the saved plan.
+4. **No "which backend?" questions:** the AI is told the site's built-in database (with login and Google login) is always available, and it must never ask about backend technology, hosting or database choices.
+5. **Section-based edits:** for a change request, the AI gets only the relevant sections, each with an ID, and sends back just the corrected sections. They are swapped in by ID. Coins are charged only for that work. The old exact-text matching stays as a backup.
+6. **Multi-page sites:** sites can have pages like Home, About and Contact (`#/`, `#/about`, `#/contact`). Menu links switch pages without reloading, and the browser back/forward buttons work.
+7. **Database during edits too:** if an edit request mentions login, database, booking, order and similar words, the database is set up automatically before the edit, just like a new build.
+
+## Technical details
+- **Images** (`assets.server.ts` `postProcessAssets` + prompt): rule "use ONLY URLs from PHOTOS list; never invent images.unsplash/other URLs". Post-process: every `<img>` gets an `onerror` that hides it and adds the `hx-img-fallback` gradient class to the parent. Unknown/invented Unsplash URLs get swapped for a library photo of the same category. Inline `background-image:url(...)` gets a gradient layer added (`linear-gradient(...), url(...)`). Runs for new builds and edits.
+- **Questions vs plan** (builder): `isRealPlan(text)` = contains `## অংশসমূহ` or `## ফিচার`. Only then does `setPlanView` run or the "প্ল্যান খুলুন"/approve buttons show. Otherwise the message shows `[[option]]` chips plus a custom input; tapping sends the answer in plan mode.
+- **Approve**: new `approvePlan` server path. The client sends `{ intent: "build_from_plan", planMessageId }` with a short user bubble "✅ প্ল্যান অনুমোদিত — বানানো শুরু হচ্ছে...". `generate.ts` loads the plan text from `messages` (owner-checked) and uses it as the build prompt on the server; the long text never shows in the chat.
+- **Backend rule**: add to `PLAN_FORMAT` and the question prompt: "Backend is built in (hexaDB: tables, login, Google login). NEVER ask about backend/database/hosting/stack."
+- **Section edits** (`context.server.ts`): before editing, tag top-level blocks with `data-hx-id="s1..sN"` if missing (stored in `code_html`). New `SECTION_RULE`: reply with `<hx-section id="sN">…full corrected block…</hx-section>` (new section: `id="new" after="sN"`). `applySections()` replaces by ID. If that fails → `applyPatches` → one full-rewrite fallback. Tokens are counted from the actual call only.
+- **Multi-page**: prompt rule for when the user asks for multiple pages: wrap each page in `<section data-page="home|about|...">`, nav links `href="#/about"`. `postProcessAssets` injects a tiny router script (only when `data-page` exists) that shows/hides on `hashchange`, defaults to the first page, scrolls to the top, and marks the active nav link. Back/forward work through native hash history.
+- **Edit backend**: in `generate.ts` drop the "new build only" condition so it runs whenever `!backend_enabled && BACKEND_KEYWORDS.test(prompt)`, not for plan/ask or resumed steps; after setup, `injectBackend` is applied to the edited HTML.
+- No database schema changes needed.
