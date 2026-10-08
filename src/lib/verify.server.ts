@@ -48,6 +48,23 @@ export async function verifySite(db: any, html: string, appOrigin: string): Prom
       fixedImages++;
     }
   }
+  // Emoji used as a picture (a lone emoji inside an image/card box) → real library photo.
+  const EMO = /^\s*(?:\p{Extended_Pictographic}\uFE0F?\s*){1,3}$/u;
+  const boxes = [...out.matchAll(/<(div|span|figure)\b([^>]*class=["'][^"']*(?:img|image|photo|thumb|emoji|icon-lg|dish|card-media|food)[^"']*["'][^>]*)>([^<]{1,12})<\/\1>/gi)].filter((m) => EMO.test(m[3]));
+  let emojiImages = 0;
+  if (boxes.length) {
+    const cat = /খাবার|রেস্টুরেন্ট|food|menu|dish|মেনু/i.test(out) ? "food" : /product|পণ্য|শপ/i.test(out) ? "product" : "lifestyle";
+    const { data } = await db.from("curated_photos").select("url, alt").eq("enabled", true).eq("category", cat).limit(30);
+    const pool = ((data ?? []) as { url: string; alt: string }[]).sort(() => Math.random() - 0.5);
+    for (const m of boxes) {
+      const ph = pool[emojiImages % Math.max(1, pool.length)];
+      if (!ph) break;
+      out = out.replace(m[0], `<${m[1]}${m[2]}><img src="${ph.url}" alt="${ph.alt.replace(/"/g, "")}" loading="lazy" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block"></${m[1]}>`);
+      emojiImages++;
+    }
+  }
+  const disabledButtons = [...out.matchAll(/<button\b[^>]*\bdisabled\b[^>]*>/gi)].length;
+  if (emojiImages) fixedImages += emojiImages;
   return { html: out, report: { pages: pages.length, links, brokenLinks, emptySections, images: urls.length, fixedImages, brokenImages: bad.length - fixedImages } };
 }
 

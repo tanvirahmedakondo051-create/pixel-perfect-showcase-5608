@@ -98,7 +98,7 @@ export const ANIMATED_BG_CSS = `<style data-hx-bg>
 
 /** Inject only the scripts the page uses, lazy-load images, size Unsplash URLs, add graceful fallbacks. */
 /** Hash router for multi-page sites: top-level [data-page] blocks shown at #/name; unknown → home; reveals content in the shown page. */
-const PAGES = `<style data-hx-pages>[data-hx-off]{display:none!important}</style><script data-hx-pages>(function(){var P=[].slice.call(document.querySelectorAll("[data-page]")).filter(function(p){return !(p.parentElement&&p.parentElement.closest("[data-page]"))});if(!P.length)return;var N=P.map(function(p){return (p.getAttribute("data-page")||"").toLowerCase()});var H=N.indexOf("home")>=0?"home":N[0];function cur(){var m=location.hash.match(/^#\\/?([\\w-]*)/);var h=((m&&m[1])||"").toLowerCase();if(!h)return H;if(N.indexOf(h)>=0)return h;if(document.getElementById(h))return null;return H}function go(){var n=cur();if(n===null){var t=document.getElementById(location.hash.slice(1)),pg=t&&t.closest("[data-page]");if(pg)n=(pg.getAttribute("data-page")||"").toLowerCase();else return}P.forEach(function(p,i){var on=N[i]===n;p.hidden=!on;if(on)p.removeAttribute("data-hx-off");else p.setAttribute("data-hx-off","")});var sh=P[N.indexOf(n)];if(sh)sh.querySelectorAll(".reveal,.fade-up,.fade-in,[data-reveal],[data-aos],.animate-on-scroll").forEach(function(e){e.classList.add("visible","in-view","is-visible","show","active","revealed","aos-animate");e.style.opacity="";});document.querySelectorAll('a[href^="#"]').forEach(function(a){var t=(a.getAttribute("href").replace(/^#\\/?/,"")||H).toLowerCase();if(N.indexOf(t)<0)return;var on=t===n;a.classList.toggle("active",on);if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});if(/^#\\/?[\\w-]*$/.test(location.hash||"#")&&N.indexOf(((location.hash.match(/^#\\/?([\\w-]*)/)||[])[1]||"").toLowerCase())>=0||!location.hash)window.scrollTo(0,0);window.dispatchEvent(new Event("scroll"))}window.addEventListener("hashchange",go);if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()})();</script>`;
+const PAGES = `<style data-hx-pages>[data-hx-off]{display:none!important}[data-page][data-hx-on]{display:block!important;visibility:visible!important;opacity:1!important}</style><script data-hx-pages>(function(){var P=[].slice.call(document.querySelectorAll("[data-page]")).filter(function(p){return !(p.parentElement&&p.parentElement.closest("[data-page]"))});if(!P.length)return;var N=P.map(function(p){return (p.getAttribute("data-page")||"").toLowerCase()});var H=N.indexOf("home")>=0?"home":N[0];function cur(){var m=location.hash.match(/^#\\/?([\\w-]*)/);var h=((m&&m[1])||"").toLowerCase();if(!h)return H;if(N.indexOf(h)>=0)return h;if(document.getElementById(h))return null;return H}function go(){var n=cur();if(n===null){var t=document.getElementById(location.hash.slice(1)),pg=t&&t.closest("[data-page]");if(pg)n=(pg.getAttribute("data-page")||"").toLowerCase();else return}P.forEach(function(p,i){var on=N[i]===n;p.hidden=!on;p.classList.toggle("active",on);if(on){p.removeAttribute("data-hx-off");p.setAttribute("data-hx-on","")}else{p.setAttribute("data-hx-off","");p.removeAttribute("data-hx-on")}});var sh=P[N.indexOf(n)];if(sh)sh.querySelectorAll(".reveal,.fade-up,.fade-in,[data-reveal],[data-aos],.animate-on-scroll").forEach(function(e){e.classList.add("visible","in-view","is-visible","show","active","revealed","aos-animate");e.style.opacity="";});document.querySelectorAll('a[href^="#"]').forEach(function(a){var t=(a.getAttribute("href").replace(/^#\\/?/,"")||H).toLowerCase();if(N.indexOf(t)<0)return;var on=t===n;a.classList.toggle("active",on);if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});if(/^#\\/?[\\w-]*$/.test(location.hash||"#")&&N.indexOf(((location.hash.match(/^#\\/?([\\w-]*)/)||[])[1]||"").toLowerCase())>=0||!location.hash)window.scrollTo(0,0);window.dispatchEvent(new Event("scroll"))}window.addEventListener("hashchange",go);window.addEventListener("load",go);if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go();setTimeout(go,400)})();</script>`;
 /** Removes AI-written page switchers that would fight the built-in router. */
 function stripAiRouters(s: string) {
   return s.replace(/<script(?![^>]*\bsrc=)(?![^>]*data-hx)[^>]*>([\s\S]*?)<\/script>/gi, (m, body) => (/hashchange/.test(body) && /data-page/.test(body) ? "" : m));
@@ -107,15 +107,48 @@ function stripAiRouters(s: string) {
 /** Counters always show their real final number (never "0"); animate up when visible, re-run on page switch. */
 const COUNTERS = `<script data-hx-count>(function(){var BN="০১২৩৪৫৬৭৮৯";function toEn(s){return String(s).replace(/[০-৯]/g,function(d){return BN.indexOf(d)})}function fmt(n,bn){var s=Math.round(n).toLocaleString("en-US");return bn?s.replace(/[0-9]/g,function(d){return BN[d]}):s}var sel="[data-count],[data-target],[data-counter],.counter,.count-up,.stat-number,.stat-num,.counter-value";function setup(){document.querySelectorAll(sel).forEach(function(el){if(el.dataset.hxc)return;var raw=el.getAttribute("data-count")||el.getAttribute("data-target")||el.getAttribute("data-counter")||el.textContent;var m=toEn(raw).replace(/,/g,"").match(/\\d+(\\.\\d+)?/);if(!m)return;var t=parseFloat(m[0]);if(!t)return;var bn=/[০-৯]/.test(raw+el.textContent);var txt=el.textContent;var suf=(txt.match(/[^\\d০-৯,.\\s]+\\s*$/)||[""])[0];if(!suf&&!/\\d|[০-৯]/.test(txt))suf="";el.dataset.hxc="1";el.dataset.hxt=t;el.dataset.hxs=suf;el.dataset.hxb=bn?"1":"";el.textContent=fmt(t,bn)+suf})}function run(el){var t=+el.dataset.hxt,s=el.dataset.hxs,bn=!!el.dataset.hxb,st=null;if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;function f(ts){if(!st)st=ts;var p=Math.min(1,(ts-st)/1600);el.textContent=fmt(t*(1-Math.pow(1-p,3)),bn)+s;if(p<1)requestAnimationFrame(f);else el.textContent=fmt(t,bn)+s}requestAnimationFrame(f)}function watch(){setup();var els=[].slice.call(document.querySelectorAll("[data-hxc]"));if(!("IntersectionObserver" in window))return;var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){io.unobserve(e.target);run(e.target)}})},{threshold:.3});els.forEach(function(el){io.observe(el)})}function go(){try{watch()}catch(e){}}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(go,50)});else setTimeout(go,50);window.addEventListener("hashchange",function(){setTimeout(go,80)});window.addEventListener("load",function(){setTimeout(function(){document.querySelectorAll("[data-hxc]").forEach(function(el){if(/^\\s*0\\D*$/.test(el.textContent))el.textContent=fmt(+el.dataset.hxt,!!el.dataset.hxb)+el.dataset.hxs})},2500)})})();</script>`;
 
+const WAVE_CSS = `<style data-hx-wave>.hx-wave{display:block;line-height:0;margin:-1px 0;overflow:hidden}.hx-wave svg{display:block;width:100%;height:56px}@media(min-width:768px){.hx-wave svg{height:80px}}</style>`;
+
+/** Top-level data-page blocks: keep only the first of each name (AI sometimes repeats "contact"). */
+function dedupePages(s: string) {
+  const seen = new Set<string>();
+  return s.replace(/<(section|div|main)\b([^>]*\bdata-page=["']([\w-]+)["'][^>]*)>/gi, (m, tag, attrs, name) => {
+    const k = name.toLowerCase();
+    if (!seen.has(k)) { seen.add(k); return m; }
+    let i = 2; while (seen.has(`${k}-${i}`)) i++;
+    seen.add(`${k}-${i}`);
+    return `<${tag}${attrs.replace(/data-page=["'][\w-]+["']/, `data-page="${k}-${i}" data-hx-dup="1"`)}>`;
+  }).replace(/<(section|div|main)\b[^>]*data-hx-dup="1"[^>]*>[\s\S]*?<\/\1>/gi, (m) => (/<(section|div|main)\b/gi.test(m.slice(1)) ? m.replace(/data-hx-dup="1"/, "") : ""));
+}
+
+/** Booking / admin / order links go where they promise; buttons are never dead. */
+function fixLinks(s: string) {
+  const pages = new Set([...s.matchAll(/data-page=["']([\w-]+)["']/g)].map((m) => m[1].toLowerCase()));
+  const bookingTarget = pages.has("booking") ? "#/booking" : pages.has("reservation") ? "#/reservation" : /id=["']booking["']/.test(s) ? "#booking" : /id=["']reservation["']/.test(s) ? "#reservation" : pages.has("contact") ? "#/contact" : null;
+  s = s.replace(/<a\b([^>]*)>([\s\S]{0,120}?)<\/a>/gi, (m, attrs, inner) => {
+    const text = inner.replace(/<[^>]+>/g, "").trim();
+    let to: string | null = null;
+    if (/টেবিল বুক|বুক করুন|রিজার্ভ|book (a )?table|reserve/i.test(text) && bookingTarget) to = bookingTarget;
+    else if (/^(অ্যাডমিন|এডমিন|admin)/i.test(text)) to = "#/admin";
+    if (!to) return m;
+    const a = /href=/.test(attrs) ? attrs.replace(/href=(["'])[^"']*\1/, `href="${to}"`) : `${attrs} href="${to}"`;
+    return `<a${a}>${inner}</a>`;
+  });
+  // Dead disabled buttons: enable them (a real reason would be data-keep-disabled).
+  s = s.replace(/<button\b([^>]*)>/gi, (m, a) => (/\bdisabled\b/.test(a) && !/data-keep-disabled/.test(a) ? `<button${a.replace(/\s+disabled(=["'][^"']*["'])?/g, "")}>` : m));
+  return s;
+}
+
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
   let n = 0;
-  let s = html.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a) => (n++ === 0 ? m : `<img loading="lazy" decoding="async"${a}>`));
+  let s = fixLinks(dedupePages(html)).replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a) => (n++ === 0 ? m : `<img loading="lazy" decoding="async"${a}>`));
   s = s.replace(/(https:\/\/images\.unsplash\.com\/photo-[\w-]+)(?![\w?=&-]*[?&]w=)(\?[^"'\s)]*)?/g, (_m, base, q) => `${base}${q ? q + "&" : "?"}auto=format&fit=crop&w=1600&q=75`);
   const head: string[] = [];
   if (/<lottie-player/i.test(s) && !/lottie-player\.js/i.test(s)) head.push(`<script defer src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script>`);
   if (/<lord-icon/i.test(s) && !/lordicon\.js/i.test(s)) head.push(`<script defer src="https://cdn.lordicon.com/lordicon.js"></script>`);
   if (/\bhx-(mesh|gradient)\b/.test(s) && !s.includes("data-hx-bg")) head.push(ANIMATED_BG_CSS);
+  if (/\bhx-wave\b/.test(s) && !s.includes("data-hx-wave")) head.push(WAVE_CSS);
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
   s = s.replace(/<script data-hx-count>[\s\S]*?<\/script>/g, "");
   if (/data-count|data-target|data-counter|class=["'][^"']*\b(counter|count-up|stat-number|stat-num|counter-value)\b/.test(s)) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, COUNTERS + "\n</body>");

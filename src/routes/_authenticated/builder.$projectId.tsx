@@ -25,7 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PREVIEW_MS } from "@/lib/hosting";
 import { BackendDialog, FilesDialog } from "@/components/app/BackendDialog";
-import { setupBackend, setProjectType } from "@/lib/backend.functions";
+import { setupBackend } from "@/lib/backend.functions";
 import { Database, FolderTree } from "lucide-react";
 import { getJob, cancelJob, activeJob } from "@/lib/jobs.functions";
 import { PlanDialog } from "@/components/app/PlanDialog";
@@ -100,7 +100,6 @@ function Builder() {
   const [beSuggest, setBeSuggest] = useState<string | null>(null);
   const [beBusy, setBeBusy] = useState(false);
   const doSetup = useServerFn(setupBackend);
-  const doType = useServerFn(setProjectType);
   const isMobile = useIsMobile();
   const { data: packs } = useSkillPacks();
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -537,18 +536,6 @@ function Builder() {
                 <h2 className="text-xl font-semibold">কী ধরনের ওয়েবসাইট চান?</h2>
                 <p className="mt-1 text-sm text-muted-foreground">ধরন বাছাই করলে AI সেই বিষয়ে বিশেষজ্ঞের মতো বানাবে</p>
                 <div className="mt-5"><SkillGrid /></div>
-                <p className="mt-6 text-sm font-semibold">প্রজেক্টের ধরন</p>
-                <div className="mx-auto mt-2 grid max-w-sm grid-cols-2 gap-2">
-                  {([["html", "🌐 সিঙ্গেল HTML", "দ্রুত, সাধারণ সাইট"], ["react", "⚛️ React + Vite", "বড় মাল্টি-ফাইল অ্যাপ"]] as const).map(([k, l, d]) => {
-                    const active = ((project as any)?.project_type ?? "html") === k;
-                    return (
-                      <button key={k} onClick={async () => { if (active) return; const r = await doType({ data: { projectId, type: k } }); if ("error" in r) return toast.error(r.error); qc.invalidateQueries({ queryKey: ["project", projectId] }); toast.success(k === "react" ? "React + Vite মোড চালু" : "সিঙ্গেল HTML মোড"); }}
-                        className={`glass min-h-16 rounded-2xl px-3 py-2 text-sm ${active ? "border-cyan text-cyan" : "hover:border-primary"}`}>
-                        <span className="block font-semibold">{l}</span><span className="block text-[11px] text-muted-foreground">{d}</span>
-                      </button>
-                    );
-                  })}
-                </div>
               </div>
             )}
             {beSuggest && !(project as any)?.backend_enabled && (
