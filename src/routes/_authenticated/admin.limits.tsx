@@ -21,10 +21,10 @@ function Limits() {
   const { data: s } = useSiteSettings();
   const reset = useServerFn(adminResetUsage);
   const [caps, setCaps] = useState<Record<string, number>>({});
-  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 16000, tokens_per_coin: 10000, free_block_publish: false, require_email_verify: false, single_pass_simple: false });
+  const [g, setG] = useState({ rate_limit_per_minute: 10, max_output_tokens: 16000, tokens_per_coin: 10000, free_block_publish: false, require_email_verify: false, single_pass_simple: false, qa_screenshots: true });
   const [confirm, setConfirm] = useState(false);
   useEffect(() => { if (plans) setCaps(Object.fromEntries(plans.map((p) => [p.id, p.tokens_per_day]))); }, [plans]);
-  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, tokens_per_coin: (s as any).tokens_per_coin ?? 10000, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify, single_pass_simple: (s as any).single_pass_simple ?? false }); }, [s]);
+  useEffect(() => { if (s) setG({ rate_limit_per_minute: s.rate_limit_per_minute, max_output_tokens: s.max_output_tokens, tokens_per_coin: (s as any).tokens_per_coin ?? 10000, free_block_publish: s.free_block_publish, require_email_verify: s.require_email_verify, single_pass_simple: (s as any).single_pass_simple ?? false, qa_screenshots: (s as any).qa_screenshots ?? true }); }, [s]);
 
   async function save() {
     for (const [id, v] of Object.entries(caps)) await supabase.from("plans").update({ tokens_per_day: +v }).eq("id", id);
