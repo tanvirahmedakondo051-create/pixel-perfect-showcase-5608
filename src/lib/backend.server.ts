@@ -89,19 +89,23 @@ signup:function(e,p,n){return req("/auth",{method:"POST",body:{action:"signup",e
 /** Built-in login button + popup, added only when the AI forgot a login UI. */
 const LOGIN_UI = `<div data-hexa-login><style>.hxl-btn{position:fixed;right:16px;bottom:16px;z-index:9998;display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid rgba(255,255,255,.2);background:rgba(15,10,30,.85);color:#fff;font:600 15px/1 inherit;backdrop-filter:blur(10px);cursor:pointer;box-shadow:0 8px 24px rgba(0,0,0,.25)}.hxl-ov{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}.hxl-ov.on{display:flex}.hxl-box{width:100%;max-width:380px;background:#fff;color:#111;border-radius:16px;padding:24px;font-family:inherit}.hxl-box h3{margin:0 0 14px;font-size:20px}.hxl-box input{width:100%;box-sizing:border-box;min-height:44px;margin:0 0 10px;padding:0 12px;border:1px solid #ddd;border-radius:10px;font:inherit}.hxl-box button{width:100%;min-height:44px;border-radius:10px;border:0;font:600 15px inherit;cursor:pointer;margin-top:4px}.hxl-p{background:#4f46e5;color:#fff}.hxl-g{background:#f3f4f6;color:#111;display:flex;align-items:center;justify-content:center;gap:8px}.hxl-s{font-size:13px;color:#555;text-align:center;margin-top:10px;cursor:pointer}.hxl-e{color:#b91c1c;font-size:13px;min-height:18px}</style>
 <button class="hxl-btn" type="button" data-hxl-open>লগইন</button><div class="hxl-ov" role="dialog" aria-modal="true" aria-label="লগইন"><form class="hxl-box"><h3 data-hxl-t>লগইন করুন</h3><input data-hxl-n placeholder="আপনার নাম" style="display:none"><input data-hxl-em type="email" placeholder="ইমেইল" required><input data-hxl-pw type="password" placeholder="পাসওয়ার্ড" required minlength="6"><div class="hxl-e" data-hxl-err></div><button class="hxl-p" type="submit" data-hxl-sub>লগইন</button><button class="hxl-g" type="button" data-hxl-g><img src="https://api.iconify.design/logos:google-icon.svg" width="18" height="18" alt="" aria-hidden="true">Google দিয়ে লগইন</button><div class="hxl-s" data-hxl-sw>অ্যাকাউন্ট নেই? সাইন আপ করুন</div></form></div>
-<script>(function(){var r=document.querySelector("[data-hexa-login]"),b=r.querySelector("[data-hxl-open]"),o=r.querySelector(".hxl-ov"),f=r.querySelector("form"),up=false;function q(s){return r.querySelector(s)}function paint(){var u=window.hexaDB&&hexaDB.user();b.textContent=u?((u.name||u.email||"")+" · লগআউট"):"লগইন"}b.onclick=function(){if(hexaDB.user()){hexaDB.logout();paint();return}o.classList.add("on")};o.onclick=function(e){if(e.target===o)o.classList.remove("on")};q("[data-hxl-sw]").onclick=function(){up=!up;q("[data-hxl-n]").style.display=up?"":"none";q("[data-hxl-t]").textContent=up?"সাইন আপ করুন":"লগইন করুন";q("[data-hxl-sub]").textContent=up?"সাইন আপ":"লগইন";this.textContent=up?"অ্যাকাউন্ট আছে? লগইন করুন":"অ্যাকাউন্ট নেই? সাইন আপ করুন"};q("[data-hxl-g]").onclick=function(){hexaDB.loginWithGoogle()};f.onsubmit=function(e){e.preventDefault();var em=q("[data-hxl-em]").value,pw=q("[data-hxl-pw]").value;q("[data-hxl-err]").textContent="";(up?hexaDB.signup(em,pw,q("[data-hxl-n]").value):hexaDB.login(em,pw)).then(function(){o.classList.remove("on");paint()}).catch(function(x){q("[data-hxl-err]").textContent=(x&&x.message)||"হয়নি, আবার চেষ্টা করুন"})};setTimeout(paint,300)})();</script></div>`;
+<script>(function(){var r=document.querySelector("[data-hexa-login]"),b=r.querySelector("[data-hxl-open]"),o=r.querySelector(".hxl-ov"),f=r.querySelector("form"),up=false;function q(s){return r.querySelector(s)}function paint(){var u=window.hexaDB&&hexaDB.user();b.textContent=u?((u.name||u.email||"")+" · লগআউট"):"লগইন"}b.onclick=function(){if(hexaDB.user()){hexaDB.logout();paint();return}o.classList.add("on")};o.onclick=function(e){if(e.target===o)o.classList.remove("on")};q("[data-hxl-sw]").onclick=function(){up=!up;q("[data-hxl-n]").style.display=up?"":"none";q("[data-hxl-t]").textContent=up?"সাইন আপ করুন":"লগইন করুন";q("[data-hxl-sub]").textContent=up?"সাইন আপ":"লগইন";this.textContent=up?"অ্যাকাউন্ট আছে? লগইন করুন":"অ্যাকাউন্ট নেই? সাইন আপ করুন"};q("[data-hxl-g]").onclick=function(){hexaDB.loginWithGoogle()};f.onsubmit=function(e){e.preventDefault();var em=q("[data-hxl-em]").value,pw=q("[data-hxl-pw]").value;q("[data-hxl-err]").textContent="";(up?hexaDB.signup(em,pw,q("[data-hxl-n]").value):hexaDB.login(em,pw)).then(function(){o.classList.remove("on");paint()}).catch(function(x){q("[data-hxl-err]").textContent=(x&&x.message)||"হয়নি, আবার চেষ্টা করুন"})};document.addEventListener("click",function(e){var t=e.target&&e.target.closest&&e.target.closest('[data-hx-login],a[href="#login"],a[href="#/login"]');if(!t)return;e.preventDefault();if(!hexaDB.user())o.classList.add("on")},true);window.hxOpenLogin=function(){o.classList.add("on")};setTimeout(paint,300)})();</script></div>`;
 
 /** True when the page already has its own login/sign-up UI. */
 const hasLoginUi = (html: string) => /hexaDB\.(login|signup|loginWithGoogle)\s*\(/.test(html.replace(/<script data-hexa-db>[\s\S]*?<\/script>/g, "").replace(/<div data-hexa-login>[\s\S]*?<\/script><\/div>/g, ""));
 
 /** Idempotently puts the hexaDB client at the top of <head>. */
+/** One login window per site: AI pop-ups auto-open only on the first visit; emoji stripped from login titles/buttons. */
+const LOGIN_GUARD = `<script data-hx-login-guard>(function(){var seen=false;try{seen=!!localStorage.getItem("hx_login_seen");localStorage.setItem("hx_login_seen","1")}catch(e){}function fix(){var em=/[\\u{1F300}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{FE0F}]/gu;document.querySelectorAll('[role=dialog] h1,[role=dialog] h2,[role=dialog] h3,[class*=modal] h2,[class*=modal] h3,[id*=login] h2,[id*=login] h3,[class*=login] button').forEach(function(h){if(em.test(h.textContent))h.textContent=h.textContent.replace(em,"").trim()});if(seen)document.querySelectorAll('[id*=login],[class*=login-modal],[class*=auth-modal],[id*=auth]').forEach(function(m){if(m.matches('[role=dialog],[class*=modal],[class*=overlay]')&&getComputedStyle(m).display!=="none"&&!m.dataset.hxUser){m.classList.remove("show","open","active","is-open");}})}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",function(){setTimeout(fix,30)});else setTimeout(fix,30);setTimeout(fix,1200)})();</script>`;
+
 export function injectBackend(html: string, origin: string, projectId: string) {
   if (!html) return html;
   const clean = html.replace(/<script data-hexa-db>[\s\S]*?<\/script>/g, "");
   const tag = CLIENT(`${origin}/api/public/db/${projectId}`);
   let out = /<head[^>]*>/i.test(clean) ? clean.replace(/<head[^>]*>/i, (m) => m + tag) : tag + clean;
-  out = out.replace(/<div data-hexa-login>[\s\S]*?<\/script><\/div>/g, "");
+  out = out.replace(/<div data-hexa-login>[\s\S]*?<\/script><\/div>/g, "").replace(/<script data-hx-login-guard>[\s\S]*?<\/script>/g, "");
   if (!hasLoginUi(out) && /<\/body>/i.test(out)) out = out.replace(/<\/body>(?![\s\S]*<\/body>)/i, LOGIN_UI + "\n</body>");
+  if (/<\/body>/i.test(out)) out = out.replace(/<\/body>(?![\s\S]*<\/body>)/i, LOGIN_GUARD + "\n</body>");
   return out;
 }
 
@@ -124,7 +128,7 @@ export async function autoSetupBackend(db: any, p: any, userId: string, prompt: 
   const ex: any[] = existing ?? (await db.from("backend_tables").select("table_name, schema_json").eq("project_id", p.id)).data ?? [];
   const ctxTables = ex.map((t: any) => `${t.table_name}(${(t.schema_json?.columns ?? []).map((c: any) => c.name).join(",")})`).join("; ");
   const userMsg = (ctxTables ? `Existing tables (do not repeat): ${ctxTables}\n\n` : "") + prompt.slice(0, 3000);
-  let parsed: any = null; let tokens = 0;
+  let parsed: any = null; let tokens = 0; let failReason = "";
   for (let attempt = 0; attempt < 2 && !parsed?.tables; attempt++) {
     const sys = SCHEMA_SYS + (attempt ? "\n\nCRITICAL: Output ONLY the JSON object. No explanation, no markdown." : "");
     for (const pr of providers) {
@@ -135,13 +139,14 @@ export async function autoSetupBackend(db: any, p: any, userId: string, prompt: 
           body: JSON.stringify({ model: pr.model, temperature: 0.2, max_tokens: 1500, messages: [{ role: "system", content: sys }, { role: "user", content: userMsg }] }),
           signal: AbortSignal.timeout(60000),
         });
-        if (!r.ok) continue;
+        if (!r.ok) { failReason = `AI ${r.status}`; console.error("[schema] provider", pr.model, r.status, (await r.text().catch(() => "")).slice(0, 300)); continue; }
         const j: any = await r.json();
         const t = String(j.choices?.[0]?.message?.content ?? "");
         tokens += j.usage?.total_tokens ?? Math.ceil((sys.length + userMsg.length + t.length) / 4);
         parsed = parseSchemaJson(t);
+        if (!parsed?.tables) { failReason = t.trim() ? "AI-র উত্তর JSON ছিল না" : "AI খালি উত্তর দিয়েছে"; console.error(`[schema] parse fail attempt ${attempt + 1}:`, t.slice(0, 400)); }
         break;
-      } catch (e) { console.error("schema ai", e); }
+      } catch (e: any) { failReason = e?.name === "TimeoutError" ? "AI সময়মতো উত্তর দেয়নি" : "AI-তে সংযোগ হয়নি"; console.error("schema ai", e); }
     }
   }
   const coins = Math.round((tokens / Math.max(1, tokensPerCoin)) * 100) / 100;
@@ -164,6 +169,6 @@ export async function autoSetupBackend(db: any, p: any, userId: string, prompt: 
   const upd: any = { backend_enabled: true };
   if (p.code_html) { const { appOrigin } = await import("@/lib/origin.server"); upd.code_html = injectBackend(p.code_html, appOrigin(), p.id); }
   await db.from("projects").update(upd).eq("id", p.id);
-  const warning = !parsed?.tables && !created.length ? "টেবিল বানানো যায়নি, লগইন চালু হয়েছে" : undefined;
+  const warning = !parsed?.tables && !created.length ? `টেবিল বানানো যায়নি (${failReason || "অজানা কারণ"}), লগইন চালু হয়েছে` : undefined;
   return { ok: true as const, created, coins, limitHit: have.size >= maxTables && created.length < wanted.length, warning };
 }
