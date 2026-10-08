@@ -592,7 +592,13 @@ export const Route = createFileRoute("/api/public/generate")({
                 // No separate outline call: steps are decided locally (1 step for simple sites, 2 grouped steps otherwise).
                 baseHistory = [...history, userMsg()];
                 const complex = !s2.single_pass_simple || (project as any).backend_enabled || imageParts.length > 0 || prompt.length >= 120;
-                steps = complex
+                const pageList = detectPages(prompt + " " + (planMsg?.content ?? ""));
+                console.log("build pages detected", project.id, pageList.join(",") || "(single page)");
+                steps = pageList.length >= 2
+                  ? pageList.map((pg, i) => i === 0
+                      ? { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ ও মেনু`, brief: `MULTI-PAGE SITE with pages: ${pageList.join(", ")}. Sticky header/nav (with mobile menu) OUTSIDE all pages, with links href="#/" for home and href="#/${pageList.slice(1).join('", "#/')}" for the others. Then <section data-page="${pg}"> containing the full home page: premium animated hero plus 3-4 rich sections. The footer goes after all pages (outside them).` }
+                      : { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ`, brief: `ONE wrapper <section data-page="${pg}"> holding the complete, rich "${pg}" page (its own page hero/title + 2-4 detailed sections). Everything for this page must be INSIDE that one data-page wrapper.` })
+                  : complex
                   ? [
                       { id: "top", title: "হেডার, হিরো ও মূল অংশ", brief: "sticky navigation header with mobile menu, a premium animated hero, and the 2 most important content sections, each with full content depth" },
                       { id: "mid", title: "মাঝের অংশগুলো", brief: "2-3 rich middle sections (e.g. stats, process steps, showcase/gallery, pricing) with varied layouts and hover/scroll animations" },
@@ -706,7 +712,13 @@ export const Route = createFileRoute("/api/public/generate")({
                 html = v.html;
                 const { screenshotQa } = await import("@/lib/qa.server");
                 const qa = await screenshotQa(db, usedProvider ?? ordered[0], html);
-                if (qa) { tokens += qa.tokens; html = postProcessAssets(qa.html); v.report.qa = qa.summary || undefined; }
+                if (qa) {
+                  tokens += qa.tokens;
+                  // Integrity guard: never accept a fix that introduced broken characters.
+                  const broke = (qa.html.match(/\uFFFD/gu)?.length ?? 0) > (html.match(/\uFFFD/gu)?.length ?? 0);
+                  if (!broke) html = postProcessAssets(qa.html); else console.warn("qa fix rejected: broken characters");
+                  v.report.qa = qa.summary || undefined;
+                }
                 verifyNote = reportText(v.report);
               } catch (e) { console.error("verify", e); }
             }
