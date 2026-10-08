@@ -156,6 +156,35 @@ async function remove({ domain }, step) {
   return { step: "removed" };
 }
 
+// Screenshot QA: renders the page (each hash page) on phone + desktop with headless Chromium.
+// Needs: cd /opt/hexa-agent && npm i playwright && npx playwright install --with-deps chromium
+async function screenshot({ html, pages }) {
+  if (typeof html !== "string" || html.length > 8_000_000) throw new Error("invalid html");
+  let pw;
+  try { pw = require("/opt/hexa-agent/node_modules/playwright"); } catch { throw new Error("playwright not installed"); }
+  const list = (Array.isArray(pages) ? pages : [""]).filter((p) => typeof p === "string" && /^[\w-]{0,40}$/.test(p)).slice(0, 6);
+  const file = path.join(require("os").tmpdir(), `hexa-qa-${crypto.randomBytes(6).toString("hex")}.html`);
+  fs.writeFileSync(file, html);
+  const browser = await pw.chromium.launch({ headless: true, args: ["--no-sandbox"] });
+  const shots = [];
+  try {
+    for (const [device, vp] of [["phone", { width: 390, height: 844 }], ["desktop", { width: 1366, height: 900 }]]) {
+      const page = await browser.newPage({ viewport: vp });
+      for (const p of list.length ? list : [""]) {
+        await page.goto(`file://${file}#/${p}`, { waitUntil: "load", timeout: 20000 }).catch(() => {});
+        await page.waitForTimeout(1200);
+        const buf = await page.screenshot({ type: "jpeg", quality: 45 });
+        shots.push({ page: p, device, jpg: buf.toString("base64") });
+      }
+      await page.close();
+    }
+  } finally {
+    await browser.close();
+    fs.rmSync(file, { force: true });
+  }
+  return { step: "shots", shots };
+}
+
 async function handler(req, res) {
   if (req.method === "GET" && req.url === "/health") { res.end(JSON.stringify({ ok: true })); return; }
   if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
@@ -167,7 +196,7 @@ async function handler(req, res) {
     const step = (o) => res.write(JSON.stringify(o) + "\n");
     try {
       const data = JSON.parse(body);
-      const routes = { "/deploy": deploy, "/remove": remove, "/build": build, "/dns-add": dnsAdd, "/dns-remove": dnsRemove };
+      const routes = { "/deploy": deploy, "/remove": remove, "/build": build, "/dns-add": dnsAdd, "/dns-remove": dnsRemove, "/screenshot": screenshot };
       const fn = routes[req.url];
       if (!fn) throw new Error("unknown action");
       const out = await fn(data, step);
