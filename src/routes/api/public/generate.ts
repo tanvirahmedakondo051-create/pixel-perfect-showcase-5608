@@ -79,7 +79,12 @@ IMAGES: Use ONLY photo URLs given in this prompt (PHOTOS list / user uploads / a
 
 MULTI-PAGE: If the user asks for several pages (e.g. About, Contact), keep one HTML file: wrap each page in <section data-page="home|about|contact|..."> (first = home) and link with href="#/about", "#/" etc. A built-in router shows one page at a time and handles back/forward — do not write your own router. Single-page sites use normal #id anchors.
 
-BACKEND: Hexarly has a built-in backend (hexaDB: tables, visitor login/sign-up, Google login). Never mention or ask about backend technology, databases, Firebase, PHP, hosting or stacks.`;
+BACKEND: Hexarly has a built-in backend (hexaDB: tables, visitor login/sign-up, Google login). Never mention or ask about backend technology, databases, Firebase, PHP, hosting or stacks.
+
+NO EMOJI AS IMAGES: never use an emoji as a picture, card image, avatar or icon (no 🍛 in a dish card). Dish/product/team cards use real <img> photos from the PHOTOS list; icons use Iconify.
+SECTION DIVIDERS: between major sections use an inline SVG wave divider (<div class="hx-wave" aria-hidden="true"><svg viewBox="0 0 1440 80" preserveAspectRatio="none"><path d="M0,40 C360,90 1080,-10 1440,40 L1440,80 L0,80Z" fill="NEXT_SECTION_BG"/></svg></div>), not flat rectangle edges.
+EVERY BUTTON WORKS: no disabled buttons without a visible reason. Order/booking buttons submit to hexaDB (when available) or open the form/page they promise. "টেবিল বুক করুন" links to the booking form; "অ্যাডমিন" links to #/admin. A single login UI only — never auto-open login on page load; login triggers get data-hx-login.
+UNIQUE PAGES: each data-page name appears exactly once.`;
 
 const REACT_RULE = `
 
@@ -297,11 +302,12 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         let extra = "";
         if (atts.length) extra += `\n\nUSER UPLOADED FILES (use these exact URLs in the site when relevant, e.g. as <img src>):\n${atts.map((a) => `- ${a.name} (${a.type}): ${a.url}`).join("\n")}`;
-        const link = prompt.match(/https?:\/\/[^\s<>"']+|(?:www\.)[a-z0-9-]+\.[a-z]{2,}[^\s<>"']*/i)?.[0];
-        if (link) {
+        const link = prompt.match(/https?:\/\/[^\s<>"']+|\b(?:www\.)?[a-z0-9-]+\.(?:com|net|org|io|co|app|dev|xyz|shop|store|info|bd|in)(?:\.[a-z]{2})?\b[^\s<>"']*/i)?.[0];
+        if (link && !resumeCp) {
           const { analyzeUrl, analysisContext } = await import("@/lib/analyze.server");
-          const r = await analyzeUrl(link).catch(() => null);
-          if (r && "ok" in r) extra += "\n\n" + analysisContext(r.analysis);
+          const r = await analyzeUrl(/^https?:/i.test(link) ? link : "https://" + link).catch(() => null);
+          if (r && "ok" in r) extra += "\n\nREFERENCE WEBSITE (the user wants a site inspired by this — match its colour palette, typography feel, layout rhythm and section types; write ORIGINAL Bangla content, never copy its text, logos or images):\n" + analysisContext(r.analysis);
+          else console.warn("[reference] could not analyse", link);
         }
         const withExtra = (text: string) => (imageParts.length ? [{ type: "text", text: text + extra }, ...imageParts] : text + extra);
 
@@ -320,6 +326,13 @@ export const Route = createFileRoute("/api/public/generate")({
         if (analysis) {
           const files = ((analysis.file_map_json as any[]) ?? []).slice(0, 60).map((f) => `- ${f.path} (${f.role})`).join("\n");
           skillCtx += `\n\nIMPORTED CODEBASE CONTEXT: This site was imported from GitHub. Framework/style: ${analysis.framework}. Entry: ${analysis.entry_file}. Files:\n${files}\nLocal CSS/JS were inlined into the single HTML. Preserve the existing framework, class naming, colors and structure; make precise targeted edits only.`;
+        }
+        // Stack is chosen automatically on the first build — the user is never asked.
+        if (!project.code_html && !isPlan && !resumeCp && !(project as any).project_type_locked) {
+          const wantsReact = /\b(react|vite|tailwind|next\.?js|spa)\b/i.test(prompt) || /\b(dashboard|crm|erp|saas app|web app|multi-?role)\b|ড্যাশবোর্ড|ওয়েব অ্যাপ/i.test(prompt);
+          let t: "html" | "react" = "html";
+          if (wantsReact) { const { getAgent } = await import("@/lib/deploy.server"); if (await getAgent(db).catch(() => null)) t = "react"; }
+          if ((project as any).project_type !== t) { await db.from("projects").update({ project_type: t }).eq("id", project.id); (project as any).project_type = t; }
         }
         const isReact = (project as any).project_type === "react";
         const { backendContext, injectBackend, autoSetupBackend, BACKEND_KEYWORDS } = await import("@/lib/backend.server");
