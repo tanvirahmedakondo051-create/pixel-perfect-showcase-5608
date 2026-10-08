@@ -97,8 +97,12 @@ export const ANIMATED_BG_CSS = `<style data-hx-bg>
 </style>`;
 
 /** Inject only the scripts the page uses, lazy-load images, size Unsplash URLs, add graceful fallbacks. */
-/** Hash router for multi-page sites: <section data-page="about"> shown at #/about; back/forward via native hash history. */
-const PAGES = `<script data-hx-pages>(function(){var P=[].slice.call(document.querySelectorAll("[data-page]"));if(!P.length)return;function go(){var h=(location.hash.match(/^#\\/([\\w-]*)/)||[])[1]||"";var n=h||P[0].getAttribute("data-page");if(!P.some(function(p){return p.getAttribute("data-page")===n})){if(!h)return;n=P[0].getAttribute("data-page")}P.forEach(function(p){p.hidden=p.getAttribute("data-page")!==n});document.querySelectorAll('a[href^="#/"]').forEach(function(a){var t=a.getAttribute("href").slice(2)||P[0].getAttribute("data-page");a.classList.toggle("active",t===n);if(t===n)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});window.scrollTo(0,0)}window.addEventListener("hashchange",go);go()})();</script>`;
+/** Hash router for multi-page sites: top-level [data-page] blocks shown at #/name; unknown → home; reveals content in the shown page. */
+const PAGES = `<style data-hx-pages>[data-hx-off]{display:none!important}</style><script data-hx-pages>(function(){var P=[].slice.call(document.querySelectorAll("[data-page]")).filter(function(p){return !(p.parentElement&&p.parentElement.closest("[data-page]"))});if(!P.length)return;var N=P.map(function(p){return (p.getAttribute("data-page")||"").toLowerCase()});var H=N.indexOf("home")>=0?"home":N[0];function cur(){var m=location.hash.match(/^#\\/?([\\w-]*)/);var h=((m&&m[1])||"").toLowerCase();if(!h)return H;if(N.indexOf(h)>=0)return h;if(document.getElementById(h))return null;return H}function go(){var n=cur();if(n===null){var t=document.getElementById(location.hash.slice(1)),pg=t&&t.closest("[data-page]");if(pg)n=(pg.getAttribute("data-page")||"").toLowerCase();else return}P.forEach(function(p,i){var on=N[i]===n;p.hidden=!on;if(on)p.removeAttribute("data-hx-off");else p.setAttribute("data-hx-off","")});var sh=P[N.indexOf(n)];if(sh)sh.querySelectorAll(".reveal,.fade-up,.fade-in,[data-reveal],[data-aos],.animate-on-scroll").forEach(function(e){e.classList.add("visible","in-view","is-visible","show","active","revealed","aos-animate");e.style.opacity="";});document.querySelectorAll('a[href^="#"]').forEach(function(a){var t=(a.getAttribute("href").replace(/^#\\/?/,"")||H).toLowerCase();if(N.indexOf(t)<0)return;var on=t===n;a.classList.toggle("active",on);if(on)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current")});if(/^#\\/?[\\w-]*$/.test(location.hash||"#")&&N.indexOf(((location.hash.match(/^#\\/?([\\w-]*)/)||[])[1]||"").toLowerCase())>=0||!location.hash)window.scrollTo(0,0);window.dispatchEvent(new Event("scroll"))}window.addEventListener("hashchange",go);if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",go);else go()})();</script>`;
+/** Removes AI-written page switchers that would fight the built-in router. */
+function stripAiRouters(s: string) {
+  return s.replace(/<script(?![^>]*\bsrc=)(?![^>]*data-hx)[^>]*>([\s\S]*?)<\/script>/gi, (m, body) => (/hashchange/.test(body) && /data-page/.test(body) ? "" : m));
+}
 
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
@@ -113,7 +117,7 @@ export function postProcessAssets(html: string) {
   if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
   // Background photos: put a brand gradient underneath so a failed photo never leaves an empty box.
   s = s.replace(/background-image\s*:\s*url\(([^)]+)\)(?!\s*,)/gi, (m, u) => (/linear-gradient/i.test(m) ? m : `background-image:url(${u}),linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))`));
-  s = s.replace(/<script data-hx-pages>[\s\S]*?<\/script>/g, "");
-  if (/data-page=/.test(s)) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, PAGES + "\n</body>");
+  s = s.replace(/<script data-hx-pages>[\s\S]*?<\/script>/g, "").replace(/<style data-hx-pages>[\s\S]*?<\/style>/g, "");
+  if (/data-page=/.test(s)) s = stripAiRouters(s).replace(/<\/body>(?![\s\S]*<\/body>)/i, PAGES + "\n</body>");
   return s;
 }
