@@ -56,6 +56,7 @@ function Limits() {
         <div className="mt-3 space-y-2">
           <Toggle label="ফ্রি ইউজাররা প্রকাশ করতে পারবে না" checked={g.free_block_publish} onChange={(v) => setG({ ...g, free_block_publish: v })} />
           <Toggle label="ছোট সাইট এক ধাপে বানাও (কম কয়েন, কম ডিটেইল)" checked={g.single_pass_simple} onChange={(v) => setG({ ...g, single_pass_simple: v })} />
+          <Toggle label="বিল্ডের পর স্ক্রিনশট চেক (VPS লাগবে, অল্প কয়েন)" checked={g.qa_screenshots} onChange={(v) => setG({ ...g, qa_screenshots: v })} />
           <Toggle label="ইমেইল যাচাই ছাড়া বানানো যাবে না" checked={g.require_email_verify} onChange={(v) => setG({ ...g, require_email_verify: v })} />
         </div>
       </Panel>
