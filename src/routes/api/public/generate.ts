@@ -14,7 +14,8 @@ const Body = z.object({
 
 const PLAN_FORMAT = `
 
-FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]].`;
+FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]] (3-4 options) and do NOT use the plan headings.
+NEVER ask which backend/database/stack/hosting to use — Hexarly has a built-in backend (hexaDB: tables, visitor login, Google login) that is set up automatically.`;
 
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
 type Step = { id: string; title: string; brief: string };
@@ -54,7 +55,13 @@ STRICT OUTPUT RULE (MUST FOLLOW):
 
 STYLE INSPIRATION: If the user provides an analyzed website (colors, fonts, layout), use the analyzed colors, fonts, and layout style as inspiration. Create ORIGINAL content, do not copy text or images.
 
-ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.`;
+ASSETS: When appropriate, use professional assets from the library instead of plain divs. Prefer Lottie for animations (via <script src="https://unpkg.com/@lottiefiles/lottie-player@2/dist/lottie-player.js"></script> and <lottie-player>), SVG icons for UI elements.
+
+IMAGES: Use ONLY photo URLs given in this prompt (PHOTOS list / user uploads / asset library). NEVER invent or guess image URLs (no made-up images.unsplash.com IDs, no placeholder services). If no photo fits, use gradient/SVG visuals.
+
+MULTI-PAGE: If the user asks for several pages (e.g. About, Contact), keep one HTML file: wrap each page in <section data-page="home|about|contact|..."> (first = home) and link with href="#/about", "#/" etc. A built-in router shows one page at a time and handles back/forward — do not write your own router. Single-page sites use normal #id anchors.
+
+BACKEND: Hexarly has a built-in backend (hexaDB: tables, visitor login/sign-up, Google login). Never mention or ask about backend technology, databases, Firebase, PHP, hosting or stacks.`;
 
 const REACT_RULE = `
 
@@ -333,7 +340,7 @@ export const Route = createFileRoute("/api/public/generate")({
         if (body.intent === "ask") {
           // Detailed prompts or a chosen site type need no questions — saves a whole AI call.
           if (isPlan || project.code_html || isReact || prompt.trim().split(/\s+/).length >= 12 || (pack && prompt.trim().split(/\s+/).length >= 5)) return Response.json({ questions: [] });
-          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
+          const sys = `You help a Bangla website builder decide whether to ask clarifying questions BEFORE building. If the request already has enough detail (business name/type, style/colors, key sections), return {"questions":[]}. Never ask about backend, database, technology stack or hosting (built in). Otherwise return 1-3 short Bangla questions, each with 3-4 short Bangla quick-answer options. Output ONLY JSON: {"questions":[{"q":"...","options":["...","..."]}]}`;
           for (const p of ordered) {
             try {
               const r = await fetch(p.base_url.replace(/\/+$/, "") + "/chat/completions", {
