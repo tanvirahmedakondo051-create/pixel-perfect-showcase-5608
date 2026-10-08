@@ -104,41 +104,9 @@ function stripAiRouters(s: string) {
   return s.replace(/<script(?![^>]*\bsrc=)(?![^>]*data-hx)[^>]*>([\s\S]*?)<\/script>/gi, (m, body) => (/hashchange/.test(body) && /data-page/.test(body) ? "" : m));
 }
 
-const EMOJI_ICON: Record<string, string> = {
-  "🍕":"mdi:pizza","🍔":"mdi:hamburger","🍟":"mdi:french-fries","☕":"mdi:coffee","🍰":"mdi:cake-variant","🎂":"mdi:cake-variant","🍜":"mdi:noodles","🍲":"mdi:pot-steam","🍛":"mdi:rice","🍚":"mdi:rice","🍗":"mdi:food-drumstick","🥗":"mdi:food-apple","🍎":"mdi:food-apple","🍦":"mdi:ice-cream","🍹":"mdi:glass-cocktail","🍷":"mdi:glass-wine","🍽":"mdi:silverware-fork-knife","🍴":"mdi:silverware-fork-knife","🥘":"mdi:pot-steam","🐟":"mdi:fish","🥩":"mdi:food-steak",
-  "🛒":"mdi:cart","🛍":"mdi:shopping","📦":"mdi:package-variant","🎁":"mdi:gift","💳":"mdi:credit-card","💰":"mdi:cash","💵":"mdi:cash","🏷":"mdi:tag","👕":"mdi:tshirt-crew","👗":"mdi:hanger","👟":"mdi:shoe-sneaker","💄":"mdi:lipstick","⌚":"mdi:watch","📱":"mdi:cellphone","💻":"mdi:laptop","🖥":"mdi:monitor",
-  "📞":"mdi:phone","☎":"mdi:phone","✉":"mdi:email","📧":"mdi:email","📩":"mdi:email","📍":"mdi:map-marker","🗺":"mdi:map","🏠":"mdi:home","🏢":"mdi:office-building","⏰":"mdi:clock-outline","🕒":"mdi:clock-outline","📅":"mdi:calendar","🗓":"mdi:calendar",
-  "⭐":"mdi:star","🌟":"mdi:star-four-points","✨":"mdi:star-four-points","✅":"mdi:check-circle","✔":"mdi:check","❌":"mdi:close-circle","🚚":"mdi:truck-fast","🚀":"mdi:rocket-launch","💡":"mdi:lightbulb-on","🔒":"mdi:lock","🔐":"mdi:lock","🛡":"mdi:shield-check","👤":"mdi:account","👥":"mdi:account-group","❤":"mdi:heart","💙":"mdi:heart","🎉":"mdi:party-popper","🏆":"mdi:trophy","🎯":"mdi:target","📈":"mdi:chart-line","📊":"mdi:chart-bar","⚡":"mdi:lightning-bolt","🔥":"mdi:fire","🌍":"mdi:earth","🌐":"mdi:web","🎨":"mdi:palette","📸":"mdi:camera","📷":"mdi:camera","🎵":"mdi:music","📚":"mdi:book-open-variant","🎓":"mdi:school","💼":"mdi:briefcase","🔧":"mdi:wrench","⚙":"mdi:cog","🔍":"mdi:magnify","👍":"mdi:thumb-up","💬":"mdi:chat","🤝":"mdi:handshake","🌱":"mdi:sprout","💪":"mdi:arm-flex","🏋":"mdi:dumbbell","✈":"mdi:airplane","🚗":"mdi:car","🏥":"mdi:hospital-box","💊":"mdi:pill",
-};
-const EMOJI_RE = /(?:\p{Regional_Indicator}{2}|[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}](?:\uFE0F|\u20E3)?(?:\u200D\p{Extended_Pictographic}\uFE0F?)*)/gu;
-const SAFE_SYMBOL = /^[©®™↔-↙▪▫▶◀◻-◾☑✓✕✖➡⬅⬆⬇↩↪⤴⤵〰〽‼⁉]$/u;
-/** Replace emoji in visible text with Iconify icons (known) or remove them (unknown). Code-enforced, not left to the AI. */
-export function replaceEmoji(html: string): { html: string; count: number } {
-  let count = 0;
-  const icon = (ch: string, inAttr: boolean) => {
-    const base = ch.replace(/[\uFE0F\u200D\u{1F3FB}-\u{1F3FF}]/gu, "").slice(0, 2);
-    const key = [...base][0] ?? "";
-    if (SAFE_SYMBOL.test(key)) return ch;
-    count++;
-    const name = EMOJI_ICON[key];
-    if (inAttr || !name) return "";
-    const u = `https://api.iconify.design/${name}.svg`;
-    return `<span aria-hidden="true" class="hx-emoji-icon" style="display:inline-block;width:1.15em;height:1.15em;vertical-align:-0.2em;background:currentColor;-webkit-mask:url(${u}) center/contain no-repeat;mask:url(${u}) center/contain no-repeat"></span>`;
-  };
-  const parts = html.split(/(<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<head\b[\s\S]*?<\/head>|<[^>]+>)/i);
-  const out = parts.map((p, i) => {
-    if (i % 2 === 0) return p.replace(EMOJI_RE, (m) => icon(m, false));
-    if (/^<(script|style|head)\b/i.test(p)) return p;
-    return p.replace(/(\s(?:alt|title|aria-label|placeholder)=)(["'])([^"']*)\2/gi, (_m, a, q, v) => a + q + v.replace(EMOJI_RE, (m: string) => icon(m, true)).replace(/\s{2,}/g, " ").trim() + q);
-  }).join("");
-  return { html: count ? out.replace(/(>)[ \t]+(<span [^>]*hx-emoji-icon)/g, "$1$2") : out, count };
-}
-
 export function postProcessAssets(html: string) {
   if (!/<\/body>/i.test(html)) return html;
   let n = 0;
-  const em = replaceEmoji(html);
-  html = em.html;
   let s = html.replace(/<img\b(?![^>]*\bloading=)([^>]*)>/gi, (m, a) => (n++ === 0 ? m : `<img loading="lazy" decoding="async"${a}>`));
   s = s.replace(/(https:\/\/images\.unsplash\.com\/photo-[\w-]+)(?![\w?=&-]*[?&]w=)(\?[^"'\s)]*)?/g, (_m, base, q) => `${base}${q ? q + "&" : "?"}auto=format&fit=crop&w=1600&q=75`);
   const head: string[] = [];
