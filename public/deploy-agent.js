@@ -188,9 +188,11 @@ async function screenshot({ html, pages }) {
 async function handler(req, res) {
   if (req.method === "GET" && req.url === "/health") { res.end(JSON.stringify({ ok: true })); return; }
   if (req.method !== "POST") { res.statusCode = 405; res.end(); return; }
-  let body = "";
-  req.on("data", (c) => { body += c; if (body.length > 12_000_000) req.destroy(); });
+  // Collect raw bytes and decode once: joining chunks as strings splits multi-byte Bangla letters into "���".
+  const chunks = []; let size = 0;
+  req.on("data", (c) => { chunks.push(c); size += c.length; if (size > 12_000_000) req.destroy(); });
   req.on("end", async () => {
+    const body = Buffer.concat(chunks).toString("utf8");
     if (!verify(req, body)) { res.statusCode = 401; res.end(JSON.stringify({ error: "unauthorized" })); return; }
     res.writeHead(200, { "Content-Type": "application/x-ndjson" });
     const step = (o) => res.write(JSON.stringify(o) + "\n");
