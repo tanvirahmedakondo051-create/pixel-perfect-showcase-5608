@@ -112,7 +112,7 @@ export function postProcessAssets(html: string) {
   if (head.length) s = /<\/head>/i.test(s) ? s.replace(/<\/head>/i, head.join("\n") + "\n</head>") : s;
   if (!s.includes("data-hx-fallback")) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, FALLBACK + "\n</body>");
   // Background photos: put a brand gradient underneath so a failed photo never leaves an empty box.
-  s = s.replace(/background(-image)?\s*:\s*url\(([^)]+)\)(?!\s*,)/gi, (m, _i, u) => (/linear-gradient/i.test(m) ? m : `background-image:url(${u}),linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))`));
+  s = s.replace(/background-image\s*:\s*url\(([^)]+)\)(?!\s*,)/gi, (m, u) => (/linear-gradient/i.test(m) ? m : `background-image:url(${u}),linear-gradient(135deg,rgba(99,102,241,.35),rgba(34,211,238,.25))`));
   s = s.replace(/<script data-hx-pages>[\s\S]*?<\/script>/g, "");
   if (/data-page=/.test(s)) s = s.replace(/<\/body>(?![\s\S]*<\/body>)/i, PAGES + "\n</body>");
   return s;
