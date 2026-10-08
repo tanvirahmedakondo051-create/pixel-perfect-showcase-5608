@@ -15,7 +15,7 @@ const Body = z.object({
 
 const PLAN_FORMAT = `
 
-FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan use these headings: "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]] (3-4 options) and do NOT use the plan headings.
+FORMAT: Reply in Bangla. Never output HTML or code. When proposing a site plan start with "# " + a short title (e.g. "# রেস্টুরেন্ট সাইট — অনলাইন বুকিং সহ"), then "## ইউজার কী পাবে" (3-6 short bullets of what visitors/owner get), then "## অংশসমূহ" (numbered sections with one line each), "## ফিচার" (bullets), "## ডিজাইন" (colors with hex, fonts, style/animation). Keep it concise. When you ask a question, put each quick-tap option on its own line as [[option text]] (3-4 options) and do NOT use the plan headings.
 NEVER ask which backend/database/stack/hosting to use — Hexarly has a built-in backend (hexaDB: tables, visitor login, Google login) that is set up automatically.`;
 
 type Msg = { role: "user" | "assistant"; content: string; at: string; mode?: "plan" | "build"; id?: string; ms?: number; coins?: number; title?: string; kind?: string; [k: string]: any };
@@ -288,13 +288,13 @@ export const Route = createFileRoute("/api/public/generate")({
         }
         const withExtra = (text: string) => (imageParts.length ? [{ type: "text", text: text + extra }, ...imageParts] : text + extra);
 
-        const [{ data: pack }, { data: analysis }, { data: dq }] = await Promise.all([
+        const [{ data: pack }, { data: analysis }, { data: always }] = await Promise.all([
           (project as any).skill_pack_id ? db.from("skill_packs").select("slug, name_bn, system_prompt").eq("id", (project as any).skill_pack_id).maybeSingle() : Promise.resolve({ data: null } as any),
           db.from("project_analysis").select("*").eq("project_id", project.id).maybeSingle(),
-          db.from("skill_packs").select("system_prompt").eq("slug", "design-quality").eq("is_active", true).maybeSingle(),
+          db.from("skill_packs").select("slug, system_prompt").in("slug", ["design-quality", "taste"]).eq("is_active", true),
         ]);
         let skillCtx = pack?.system_prompt ? `\n\n${pack.system_prompt}` : "";
-        if (dq?.system_prompt && (pack as any)?.slug !== "design-quality") skillCtx += `\n\n${dq.system_prompt}`;
+        for (const a of (always ?? []) as { slug: string; system_prompt: string }[]) if (a.system_prompt && (pack as any)?.slug !== a.slug) skillCtx += `\n\n${a.system_prompt}`;
         let freeAssets = "";
         if (!project.code_html && (project as any).project_type !== "react") {
           const { selectAssets } = await import("@/lib/assets.server");
@@ -403,6 +403,7 @@ export const Route = createFileRoute("/api/public/generate")({
             await (async () => {
             let usedProvider: any = null;
             let baseTokens = 0;
+            let verifyNote = "";
             send({ t: "progress", step: "অনুরোধ বিশ্লেষণ করছি...", tokens: 0 });
 
             const run = async (messages: any[], live: boolean): Promise<{ full: string; tokens: number } | null> => {
@@ -698,6 +699,16 @@ export const Route = createFileRoute("/api/public/generate")({
             } else if (!isReact) {
               const { postProcessAssets } = await import("@/lib/assets.server");
               html = postProcessAssets(html);
+              try {
+                send({ t: "progress", step: "সাইট চেক করছি...", tokens });
+                const { verifySite, reportText } = await import("@/lib/verify.server");
+                const v = await verifySite(db, html, appOrigin());
+                html = v.html;
+                const { screenshotQa } = await import("@/lib/qa.server");
+                const qa = await screenshotQa(db, usedProvider ?? ordered[0], html);
+                if (qa) { tokens += qa.tokens; html = postProcessAssets(qa.html); v.report.qa = qa.summary || undefined; }
+                verifyNote = reportText(v.report);
+              } catch (e) { console.error("verify", e); }
             }
 
             const { data: kws } = await db.from("flag_keywords").select("keyword");
@@ -707,7 +718,7 @@ export const Route = createFileRoute("/api/public/generate")({
             const now = new Date().toISOString();
             const unpaid = Math.max(0, tokens - Math.round(chargedCoins * tpc));
             const finalCoins = r2(chargedCoins + unpaid / tpc);
-            const am: Msg = { role: "assistant", content: html ? (resumeCp && !body.chained ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি", at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: (planMsg ? "প্ল্যান অনুযায়ী বিল্ড" : prompt).slice(0, 50) };
+            const am: Msg = { role: "assistant", content: (html ? (resumeCp && !body.chained ? "▶️ বাকি অংশ শেষ — ওয়েবসাইট তৈরি হয়েছে" : saved ? "✓ ওয়েবসাইট আপডেট হয়েছে" : "✓ ওয়েবসাইট তৈরি হয়েছে") : "দুঃখিত, এবার হয়নি") + (html && verifyNote ? `\n\n${verifyNote}` : ""), at: now, mode: "build", id: mid(), ms: Date.now() - startedAt, coins: finalCoins, title: (planMsg ? "প্ল্যান অনুযায়ী বিল্ড" : prompt).slice(0, 50) };
             const newMsgs: Msg[] = [...(baseHistory === history ? [...history, userMsg()] : baseHistory), am];
             const update: any = { messages: newMsgs };
             if (html && (project as any).backend_enabled) html = injectBackend(html, appOrigin(), project.id);

@@ -929,6 +929,7 @@ export type Database = {
           ns4: string
           payment_instructions: string
           plan_prompt: string
+          qa_screenshots: boolean
           rate_limit_per_minute: number
           require_email_verify: boolean
           server_ip: string
@@ -967,6 +968,7 @@ export type Database = {
           ns4?: string
           payment_instructions?: string
           plan_prompt?: string
+          qa_screenshots?: boolean
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string
@@ -1005,6 +1007,7 @@ export type Database = {
           ns4?: string
           payment_instructions?: string
           plan_prompt?: string
+          qa_screenshots?: boolean
           rate_limit_per_minute?: number
           require_email_verify?: boolean
           server_ip?: string

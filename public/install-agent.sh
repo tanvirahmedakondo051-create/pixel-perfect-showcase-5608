@@ -71,6 +71,8 @@ id hexabuild >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin
 chown -R hexabuild:hexabuild /var/hexa/projects
 if [ -n "$APP_URL" ]; then curl -fsSL "$APP_URL/deploy-agent.js" -o /opt/hexa-agent/deploy-agent.js; fi
 [ -f /opt/hexa-agent/deploy-agent.js ] || { echo "Set HEXA_APP_URL so the agent can be downloaded"; exit 1; }
+# Headless Chromium for screenshot QA (optional; failures do not stop the install)
+(cd /opt/hexa-agent && { [ -f package.json ] || echo '{"private":true}' > package.json; } && npm i --no-audit --no-fund playwright@1 && npx playwright install --with-deps chromium) || echo "Screenshot QA setup skipped"
 
 # Certificate for the agent itself (DNS of AGENT_HOST must point to this server)
 if [ ! -f "/etc/letsencrypt/live/$AGENT_HOST/fullchain.pem" ]; then

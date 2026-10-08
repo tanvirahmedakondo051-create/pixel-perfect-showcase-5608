@@ -597,10 +597,23 @@ function Builder() {
                           <button className="min-h-10 rounded-full bg-brand px-4 text-sm font-semibold text-primary-foreground">পাঠান</button>
                         </form>
                       )}
-                      {isRealPlan(m.content) && <button onClick={() => setPlanView(m.content)} className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border border-border text-sm"><FileText className="size-4" /> প্ল্যান খুলুন</button>}
-                      {i === messages.length - 1 && !streaming && isRealPlan(m.content) && (
-                        <button onClick={() => approvePlan(m.content, m.id)} className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-brand font-semibold text-primary-foreground"><CheckCircle2 className="size-4" /> অনুমোদন করে বিল্ড করুন</button>
-                      )}
+                      {isRealPlan(m.content) && (() => {
+                        const title = m.content.match(/^#\s+(.+)$/m)?.[1]?.trim() || "ওয়েবসাইটের প্ল্যান";
+                        const gets = (m.content.match(/##\s*ইউজার কী পাবে\s*\n([\s\S]*?)(?=\n##|$)/)?.[1] ?? "").split("\n").map((l) => l.replace(/^\s*[-*•\d.]+\s*/, "").trim()).filter(Boolean).slice(0, 6);
+                        const last = i === messages.length - 1 && !streaming;
+                        const orig = [...messages.slice(0, i)].reverse().find((x) => x.role === "user")?.content ?? "";
+                        return (
+                          <div className="mt-3 rounded-xl border border-cyan/40 bg-cyan/5 p-3">
+                            <p className="flex items-center gap-1.5 font-semibold"><FileText className="size-4 text-cyan" />{title}</p>
+                            {gets.length > 0 && <><p className="mt-2 text-xs font-medium text-muted-foreground">ইউজার কী পাবে</p><ul className="mt-1 space-y-1 text-sm">{gets.map((g, k) => <li key={k} className="flex gap-1.5"><CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-cyan" />{g}</li>)}</ul></>}
+                            <div className="mt-3 grid grid-cols-3 gap-2">
+                              <button onClick={() => setPlanView(m.content)} className="min-h-11 rounded-xl border border-border text-sm">রিভিউ</button>
+                              <button disabled={!last || !orig} onClick={() => { setMode("build"); send(orig, "build"); }} className="min-h-11 rounded-xl border border-border text-sm disabled:opacity-40">স্কিপ</button>
+                              <button disabled={!last} onClick={() => approvePlan(m.content, m.id)} className="min-h-11 rounded-xl bg-brand text-sm font-semibold text-primary-foreground disabled:opacity-40">অনুমোদন</button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </>
                   ) : undefined}>
                   <RichText text={m.content} />

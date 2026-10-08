@@ -1,0 +1,72 @@
+/** Post-build checks for generated HTML sites: pages, menu links, empty sections, broken images. Auto-fixes what it safely can. */
+
+export type VerifyReport = { pages: number; links: number; brokenLinks: number; emptySections: number; images: number; fixedImages: number; brokenImages: number; qa?: string };
+
+const pageNames = (html: string) => [...new Set([...html.matchAll(/data-page=["']([\w-]+)["']/g)].map((m) => m[1].toLowerCase()))];
+
+async function urlOk(url: string) {
+  try {
+    let r = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5000), redirect: "follow" });
+    if (r.status === 405 || r.status === 403) r = await fetch(url, { method: "GET", signal: AbortSignal.timeout(5000), headers: { Range: "bytes=0-0" } });
+    return r.ok || r.status === 206;
+  } catch { return false; }
+}
+
+export async function verifySite(db: any, html: string, appOrigin: string): Promise<{ html: string; report: VerifyReport }> {
+  let out = html;
+  const pages = pageNames(out);
+  // Menu links to pages that don't exist → send them home instead of a blank page.
+  let links = 0, brokenLinks = 0;
+  if (pages.length) {
+    out = out.replace(/href=(["'])#\/([\w-]*)\1/g, (m, q, name) => {
+      links++;
+      if (!name || pages.includes(name.toLowerCase())) return m;
+      brokenLinks++;
+      return `href=${q}#/${q}`;
+    });
+  }
+  // Empty sections (no text, image, icon or form inside).
+  let emptySections = 0;
+  for (const m of out.matchAll(/<section\b[^>]*>([\s\S]*?)<\/section>/gi)) {
+    const inner = m[1];
+    const text = inner.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, "").trim();
+    if (text.length < 3 && !/<(img|svg|iframe|video|form|lottie-player|canvas|iconify-icon)/i.test(inner)) emptySections++;
+  }
+  // Images: check unique external URLs, swap broken ones for library photos.
+  const urls = [...new Set([...out.matchAll(/<img\b[^>]*\bsrc=["'](https?:\/\/[^"']+)["']/gi)].map((m) => m[1]))].slice(0, 24);
+  const own = (u: string) => u.startsWith(appOrigin + "/uploads/");
+  const results = await Promise.all(urls.map(async (u) => [u, own(u) ? true : await urlOk(u)] as const));
+  const bad = results.filter(([, ok]) => !ok).map(([u]) => u);
+  let fixedImages = 0;
+  if (bad.length) {
+    const { data } = await db.from("curated_photos").select("url").eq("enabled", true).limit(60);
+    const pool = ((data ?? []) as { url: string }[]).map((p) => p.url).filter((u) => !bad.includes(u) && !urls.includes(u));
+    for (const u of bad) {
+      const rep = pool.shift();
+      if (!rep) break;
+      out = out.split(u).join(rep);
+      fixedImages++;
+    }
+  }
+  return { html: out, report: { pages: pages.length, links, brokenLinks, emptySections, images: urls.length, fixedImages, brokenImages: bad.length - fixedImages } };
+}
+
+const bnNum = (n: number) => String(n).replace(/\d/g, (d) => "০১২৩৪৫৬৭৮৯"[+d]);
+
+export function reportText(r: VerifyReport) {
+  const ok: string[] = [];
+  if (r.pages) ok.push(`${bnNum(r.pages)}টি পেজ`);
+  if (r.links) ok.push(`${bnNum(r.links - r.brokenLinks)}টি মেনু লিংক ঠিক আছে`);
+  if (r.images) ok.push(`${bnNum(r.images - r.fixedImages - r.brokenImages)}টি ছবি লোড হচ্ছে`);
+  const fixes: string[] = [];
+  if (r.brokenLinks) fixes.push(`${bnNum(r.brokenLinks)}টি ভাঙা লিংক হোমে পাঠানো হয়েছে`);
+  if (r.fixedImages) fixes.push(`${bnNum(r.fixedImages)}টি ছবি বদলানো হয়েছে`);
+  const warn: string[] = [];
+  if (r.brokenImages) warn.push(`${bnNum(r.brokenImages)}টি ছবি লোড হয়নি`);
+  if (r.emptySections) warn.push(`${bnNum(r.emptySections)}টি খালি অংশ`);
+  let t = `🔎 চেক রিপোর্ট: ✅ ${ok.join(" • ") || "সব ঠিক আছে"}`;
+  if (fixes.length) t += `\n🛠️ ${fixes.join(" • ")}`;
+  if (warn.length) t += `\n⚠️ ${warn.join(" • ")}`;
+  if (r.qa) t += `\n${r.qa}`;
+  return t;
+}

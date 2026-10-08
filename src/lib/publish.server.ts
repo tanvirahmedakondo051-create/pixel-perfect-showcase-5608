@@ -9,6 +9,7 @@ function strip(html: string) {
 /** Ask the first allowed AI for a short Bangla changelog; falls back to a generic line. */
 export async function makeChangelog(db: any, userId: string, oldHtml: string, newHtml: string): Promise<string> {
   if (!oldHtml) return "প্রথম প্রকাশ";
+  if (oldHtml === newHtml) return "কোনো পরিবর্তন নেই";
   try {
     const { effectivePlan, allowedProviders } = await import("./plan.server");
     const prof = await effectivePlan(db, userId);

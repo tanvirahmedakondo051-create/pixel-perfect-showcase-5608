@@ -46,7 +46,7 @@ function Skills() {
               <div className="flex items-center gap-2">
                 <span className="text-2xl">{s.icon}</span>
                 <h3 className="font-semibold">{s.name_bn}</h3>
-                {s.slug === "design-quality" && <span className="rounded-full bg-cyan/20 px-2 py-0.5 text-xs text-cyan">সবসময় যুক্ত</span>}
+                {(s.slug === "design-quality" || s.slug === "taste") && <span className="rounded-full bg-cyan/20 px-2 py-0.5 text-xs text-cyan">সবসময় যুক্ত</span>}
                 <span className={`ml-auto rounded-full px-2 py-0.5 text-xs ${s.is_active ? "bg-success/20 text-success" : "bg-muted text-muted-foreground"}`}>{s.is_active ? "চালু" : "বন্ধ"}</span>
               </div>
               <p className="mt-2 line-clamp-3 font-en text-xs text-muted-foreground">{s.system_prompt}</p>
