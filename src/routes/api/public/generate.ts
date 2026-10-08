@@ -29,6 +29,7 @@ PREMIUM QUALITY (TOP PRIORITY — never trade quality for brevity):
 - 6-8 rich sections with real Bangla content depth (no 2-line filler): e.g. services/features with details, stats/numbers, process steps, showcase/gallery, testimonials, FAQ, contact form — vary layouts (grids, split, bento, timeline).
 - Smooth scroll-reveal animations (IntersectionObserver), hover lift/glow on cards and buttons, smooth scrolling, sticky blurred header with mobile menu.
 - Professional typography scale, generous spacing, consistent color system, icons, badges, dividers, styled footer with links.
+- Stats/counters: write the REAL final number in the HTML text (e.g. <span data-count="500">৫০০</span>+), never 0 — a built-in script animates elements with data-count, do not write your own counter.
 - Complete, polished code; no placeholders, no lorem ipsum, no inline base64 images.
 - ANIMATED HERO BACKGROUND (required, never a flat color). Built-in classes are auto-included, do NOT write their CSS:
   a) Mesh: hero has position:relative;overflow:hidden; first child <div class="hx-mesh" aria-hidden="true"><span></span><span></span></div>; hero content gets position:relative;z-index:1.
