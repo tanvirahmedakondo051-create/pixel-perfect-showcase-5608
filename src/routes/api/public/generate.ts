@@ -44,6 +44,22 @@ function cleanFrag(t: string) {
   return s.trim();
 }
 
+const PAGE_BN: Record<string, string> = { home: "হোম", about: "আমাদের সম্পর্কে", menu: "মেনু", contact: "যোগাযোগ", services: "সেবা", gallery: "গ্যালারি", blog: "ব্লগ", shop: "শপ", pricing: "প্রাইসিং", team: "টিম", booking: "বুকিং", courses: "কোর্স", portfolio: "পোর্টফোলিও", faq: "FAQ" };
+const PAGE_RX: [string, RegExp][] = [
+  ["about", /আমাদের সম্পর্কে|সম্পর্কে|about/iu], ["menu", /মেনু|menu/iu], ["services", /সেবা|সার্ভিস|services?/iu],
+  ["gallery", /গ্যালারি|gallery/iu], ["blog", /ব্লগ|blog/iu], ["shop", /শপ পেজ|প্রোডাক্ট পেজ|shop page|products? page/iu],
+  ["pricing", /প্রাইসিং|মূল্য তালিকা|pricing/iu], ["team", /টিম পেজ|team page/iu], ["booking", /বুকিং পেজ|booking page/iu],
+  ["courses", /কোর্স পেজ|courses? page/iu], ["portfolio", /পোর্টফোলিও পেজ|portfolio page/iu], ["faq", /faq পেজ|faq page/iu],
+  ["contact", /যোগাযোগ|কন্টাক্ট|contact/iu],
+];
+/** Pages the user explicitly asked for ("... পেজ সহ", "pages: ..."). Returns [] for single-page requests. */
+export function detectPages(text: string): string[] {
+  if (!/পেজ|পাতা|pages?\b|multi-?page|মাল্টি/iu.test(text)) return [];
+  const found = PAGE_RX.filter(([, re]) => re.test(text)).map(([n]) => n);
+  if (!found.length) return [];
+  return ["home", ...found.filter((n) => n !== "home")].slice(0, 6);
+}
+
 function dhakaToday() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dhaka" }).format(new Date());
 }
@@ -596,7 +612,7 @@ export const Route = createFileRoute("/api/public/generate")({
                 console.log("build pages detected", project.id, pageList.join(",") || "(single page)");
                 steps = pageList.length >= 2
                   ? pageList.map((pg, i) => i === 0
-                      ? { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ ও মেনু`, brief: `MULTI-PAGE SITE with pages: ${pageList.join(", ")}. Sticky header/nav (with mobile menu) OUTSIDE all pages, with links href="#/" for home and href="#/${pageList.slice(1).join('", "#/')}" for the others. Then <section data-page="${pg}"> containing the full home page: premium animated hero plus 3-4 rich sections. The footer goes after all pages (outside them).` }
+                      ? { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ ও মেনু`, brief: `MULTI-PAGE SITE with pages: ${pageList.join(", ")}. Sticky header/nav (with mobile menu) OUTSIDE all pages, with links href="#/" for home and href="#/${pageList.slice(1).join('", "#/')}" for the others. Then <section data-page="${pg}"> containing the full home page: premium animated hero plus 3-4 rich sections. Put the marker comment IMMEDIATELY after the closing tag of the home data-page section, and the rich footer after that marker (outside all pages).` }
                       : { id: `page-${pg}`, title: `${PAGE_BN[pg] ?? pg} পেজ`, brief: `ONE wrapper <section data-page="${pg}"> holding the complete, rich "${pg}" page (its own page hero/title + 2-4 detailed sections). Everything for this page must be INSIDE that one data-page wrapper.` })
                   : complex
                   ? [
@@ -645,7 +661,7 @@ export const Route = createFileRoute("/api/public/generate")({
                     { role: "system", content: `You add sections to an existing Bangla website. Output ONLY the raw HTML fragment for the requested part (<section>/<footer> elements). No <html>/<head>/<body>, no markdown fences, no explanation. Reuse the existing CSS classes, colors and fonts from the given <head>. Bangla text, mobile-first. Match the hero polish: rich content, animations and hover effects.` + PREMIUM },
                     { role: "user", content: `Existing <head> (styles):\n${headOf(partial)}\n\nSections already built:\n${outline(partial.replace(MARK, ""))}\n\nWebsite request: ${prompt}\n\nNow write ONLY: ${s.brief}` },
                   ], true);
-                  if (r) { const frag = cleanFrag(r.full); if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
+                  if (r) { let frag = cleanFrag(r.full); const pg = s.id.startsWith("page-") ? s.id.slice(5) : ""; if (frag && pg && !new RegExp(`data-page=["']${pg}["']`).test(frag)) frag = `<section data-page="${pg}">\n${frag}\n</section>`; if (frag) partial = partial.includes(MARK) ? partial.replace(MARK, `${frag}\n${MARK}`) : partial.replace(/<\/body>/i, `${frag}\n</body>`); }
                 }
                 if (!r || !partial || sig.aborted) {
                   if (done.length || resumeCp) {
