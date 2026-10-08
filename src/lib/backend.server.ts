@@ -74,6 +74,7 @@ export async function backendContext(db: any, projectId: string, react: boolean)
 - hexaDB.remove(table, id)
 - hexaDB.signup(email, password, name) / hexaDB.login(email, password) -> {user}; hexaDB.logout(); hexaDB.user() -> {id,email,name,avatar}|null
 - hexaDB.loginWithGoogle() -> sends the visitor to Google and back to the same page signed in (no setup needed). On every login/sign-up form add a "Google দিয়ে লগইন" button (Iconify logos:google-icon) calling it; on load read hexaDB.user() to show the signed-in state.
+- ALWAYS put a visible "লগইন" button in the nav that opens a login/sign-up form using these calls (show the user name + logout when signed in).
 Errors throw Error with a Bangla message — show them to the visitor.
 Tables:\n${tables || "(none yet)"}${react ? "\nIn React, declare `declare global { interface Window { hexaDB: any } }`, wrap it in hooks (useTable) and an AuthContext. Do NOT install supabase-js." : ""}`;
 }
